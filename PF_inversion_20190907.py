@@ -14,6 +14,7 @@ from SimPEG import (
     )
 import SimPEG.PF as PF
 import numpy as np
+import matplotlib.pyplot as plt
 import os
 import json
 from discretize.utils import meshutils
@@ -238,6 +239,11 @@ else:
 if "tileProblem" in list(input_dict.keys()):
     tileProblem = input_dict["tileProblem"]
 
+if "show_graphics" in list(input_dict.keys()):
+    show_graphics = input_dict["show_graphics"]
+else:
+    show_graphics = False
+
 if parallelized == 'dask':
     dask.config.set({'array.chunk-size': '256MiB'})
     dask.config.set(scheduler='threads')
@@ -407,6 +413,18 @@ if meshInput is None:
 else:
     mesh = meshInput
 
+if show_graphics:
+    # Plot a slice
+    slicePosition = rxLoc[:, 1].mean()
+    
+    sliceInd = int(round(np.searchsorted(mesh.vectorCCy, slicePosition)))
+    fig, ax1 = plt.figure(), plt.subplot()
+    im = mesh.plotSlice(np.log10(mesh.vol), normal='Y', ax=ax1, ind=sliceInd, grid=True, pcolorOpts={"cmap":"plasma"})
+    ax1.set_aspect('equal')
+    t = fig.get_size_inches()
+    fig.set_size_inches(t[0]*2, t[1]*2)
+    fig.savefig(outDir + 'Section_%.0f.png' % slicePosition, bbox_inches='tight', dpi=600)
+    plt.show(block=False)
 
 print("Calculating active cells from topo")
 # Compute active cells
