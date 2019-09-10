@@ -1,0 +1,11 @@
+FILE Mesh_40m.msh			! Mesh file
+FILE gzfor3d.grv	! Obsfile
+null			! Topofile | null
+VALUE 1e-4			! Starting model
+VALUE 0.0			! Reference model
+DEFAULT				! Cell based weight file
+VALUE 1				! target chi factor | DEFAULT=1
+VALUE 1 1 1 1			! alpha s, x ,y ,z
+VALUE -1 1		! Lower and Upper Bounds for p-component
+VALUE 0 2 1 0		! lp-norm for amplitude inversion FILE pqxqyqzr.dat  ! Norms VALUE p, qx, qy, qz, r | FILE m-by-5 matrix
+VALUE 2.5e-2 2.5e-3

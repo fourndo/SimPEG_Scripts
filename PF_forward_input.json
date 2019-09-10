@@ -1,0 +1,6 @@
+{	"forward_type":"MAG",
+	"data_file": "Obs_loc_TMI.obs",
+	"mesh_file":"OctreeMeshGlobal.msh",
+	"model_file":"mvi_TOT.amp",
+	"no_data_value": 0
+}

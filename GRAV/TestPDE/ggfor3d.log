@@ -1,0 +1,31 @@
+
+Parallelized with OpenMP.  # of threads:  4
+
+GGFOR3D - Version 5.3 :  
+
+Developed by University of British Columbia 
+Geophysical Inversion Facility  (UBC-GIF)
+
+(C) Copyright 1992 - 2016, UBC-GIF,
+Department of Earth and Ocean Sciences, UBC
+http://gif.eos.ubc.ca/
+
+This program is licensed to:
+
+ For internal use within UBC-GIF.
+
+
+GGFOR3D started on: 12/12/2016  16:25:41
+
+
+ggfor3d  Mesh.msh Obs.loc Sphere.den Topo.txt
+
+           # of surface  data:     121
+           # of borehole data:       0
+ 
+              model was read from file: Sphere.den
+ 
+     TOTAL cpu time:   0:00:05.77
+
+GGFOR3D ended on: 12/12/2016  16:25:47
+

@@ -1,0 +1,6 @@
+{
+	"dataFile": ["MAG","Obs_loc_TMI.obs"],
+	"targetChi": 1.0,
+	"topography": "Gaussian.topo",
+	"octreeCellSize": [20,20,20]
+}
