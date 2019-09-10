@@ -22,7 +22,7 @@ from scipy.interpolate import NearestNDInterpolator
 from scipy.spatial import cKDTree
 from SimPEG.Utils import mkvc
 import dask
-from dask.distributed import Client
+# from dask.distributed import Client
 import multiprocessing
 import sys
 
@@ -201,6 +201,11 @@ else:
 
 if "tileProblem" in list(input_dict.keys()):
     tileProblem = input_dict["tileProblem"]
+
+if parallelized == 'dask':
+    dask.config.set({'array.chunk-size': '256MiB'})
+    dask.config.set(scheduler='threads')
+    dask.config.set(num_workers=n_cpu)
 
 rxLoc = survey.rxLoc
 
