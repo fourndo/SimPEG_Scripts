@@ -334,7 +334,66 @@ def createLocalMesh(rxLoc, ind_t):
     # Create combo misfit function
     return meshLocal, survey_t
 
-def createLocalProb(meshLocal, survey_t, ind):
+
+# Loop through the tiles and generate all sensitivities
+print("Number of tiles:" + str(nTiles))
+local_meshes, local_surveys = [], []
+for tt in range(nTiles):
+
+    print("Tile " + str(tt+1) + " of " + str(X1.shape[0]))
+
+    local_mesh, local_survey = createLocalMesh(rxLoc, tileIDs==tile_numbers[tt])
+    local_meshes += [local_mesh]
+    local_surveys += [local_survey]
+
+if meshInput is None:
+    print("Creating Global Octree")
+    mesh = meshutils.mesh_builder_xyz(
+        newTopo, core_cell_size,
+        padding_distance=padding_distance,
+        mesh_type='TREE', base_mesh=meshInput,
+        depth_core=depth_core
+        )
+
+    for local_mesh in local_meshes:
+
+        mesh.insert_cells(local_mesh.gridCC, local_mesh.cell_levels_by_index(np.arange(local_mesh.nC)), finalize=False)
+
+    mesh.finalize()
+else:
+    mesh = meshInput
+
+
+print("Calculating active cells from topo")
+# Compute active cells
+activeCells = Utils.surface2ind_topo(mesh, topo, gridLoc='CC')
+
+Mesh.TreeMesh.writeUBC(
+      mesh, outDir + 'OctreeMeshGlobal.msh',
+      models={outDir + 'ActiveSurface.act': activeCells}
+    )
+
+if "adjust_clearance" in list(input_dict.keys()):
+
+    print("Forming cKDTree for clearance calculations")
+    tree = cKDTree(mesh.gridCC[activeCells, :])
+
+
+# Get the layer of cells directly below topo
+nC = int(activeCells.sum())  # Number of active cells
+
+# Create active map to go from reduce set to full
+activeCellsMap = Maps.InjectActiveCells(mesh, activeCells, ndv)
+
+# Create identity map
+if input_dict["inversion_type"].lower() == 'mvi':
+    wrGlobal = np.zeros(3*nC)
+else:
+    idenMap = Maps.IdentityMap(nP=nC)
+    wrGlobal = np.zeros(nC)
+
+
+def createLocalProb(meshLocal, survey_t, wrGlobal, ind):
     # createLocalProb(rxLoc, wrGlobal, lims, ind)
     # Generate a problem, calculate/store sensitivities for
     # given data points
@@ -404,7 +463,7 @@ def createLocalProb(meshLocal, survey_t, ind):
     dmis = DataMisfit.l2_DataMisfit(survey_t)
     dmis.W = 1./survey_t.std
 
-    wr = prob.getJtJdiag(np.ones(tileMap.shape[1]), W=dmis.W)**0.5
+    wr = prob.getJtJdiag(np.ones(tileMap.shape[1]), W=dmis.W)
 
     activeCellsTemp = Maps.InjectActiveCells(mesh, activeCells, 1e-8)
 
@@ -417,88 +476,24 @@ def createLocalProb(meshLocal, survey_t, ind):
     del meshLocal
 
     # Create combo misfit function
-    return dmis
-
-# Loop through the tiles and generate all sensitivities
-print("Number of tiles:" + str(nTiles))
-local_meshes, local_surveys = [], []
-for tt in range(nTiles):
-
-    print("Tile " + str(tt+1) + " of " + str(X1.shape[0]))
-
-    local_mesh, local_survey = createLocalMesh(rxLoc, tileIDs==tile_numbers[tt])
-    local_meshes += [local_mesh]
-    local_surveys += [local_survey]
-
-if meshInput is None:
-    print("Creating Global Octree")
-    mesh = meshutils.mesh_builder_xyz(
-        newTopo, core_cell_size,
-        padding_distance=padding_distance,
-        mesh_type='TREE', base_mesh=meshInput,
-        depth_core=depth_core
-        )
-
-    for local_mesh in local_meshes:
-
-        mesh.insert_cells(local_mesh.gridCC, local_mesh.cell_levels_by_index(np.arange(local_mesh.nC)), finalize=False)
-
-    mesh.finalize()
-else:
-    mesh = meshInput
-
-
-print("Calculating active cells from topo")
-# Compute active cells
-activeCells = Utils.surface2ind_topo(mesh, topo, gridLoc='CC')
-
-Mesh.TreeMesh.writeUBC(
-      mesh, outDir + 'OctreeMeshGlobal.msh',
-      models={outDir + 'ActiveSurface.act': activeCells}
-    )
-
-if "adjust_clearance" in list(input_dict.keys()):
-
-    print("Forming cKDTree for clearance calculations")
-    tree = cKDTree(mesh.gridCC[activeCells, :])
-
-
-# Get the layer of cells directly below topo
-nC = int(activeCells.sum())  # Number of active cells
-
-# Create active map to go from reduce set to full
-activeCellsMap = Maps.InjectActiveCells(mesh, activeCells, ndv)
-
-# Create identity map
-if input_dict["inversion_type"].lower() == 'mvi':
-    wrGlobal = np.zeros(3*nC)
-else:
-    idenMap = Maps.IdentityMap(nP=nC)
-    wrGlobal = np.zeros(nC)
-
-
-actvGlobal = wrGlobal != 0
-if actvGlobal.sum() < activeCells.sum():
-
-    for ind, dmis in enumerate(ComboMisfit.objfcts):
-        dmis.prob.chiMap.index = actvGlobal
+    return dmis, wrGlobal
 
 
 for ind, (local_mesh, local_survey) in enumerate(zip(local_meshes, local_surveys)):
 
     print("Tile " + str(tt+1) + " of " + str(X1.shape[0]))
 
-    dmis = createLocalProb(local_mesh, local_survey, ind)
+    dmis, wrGlobal = createLocalProb(local_mesh, local_survey, wrGlobal, ind)
 
     # Add the problems to a Combo Objective function
-    if tt == 0:
+    if ind == 0:
         ComboMisfit = dmis
 
     else:
         ComboMisfit += dmis
 
 # Global sensitivity weights (linear)
-wrGlobal = wrGlobal
+wrGlobal = wrGlobal**0.5
 wrGlobal = (wrGlobal/np.max(wrGlobal))
 
 
