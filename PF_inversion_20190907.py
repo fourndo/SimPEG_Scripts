@@ -176,6 +176,18 @@ if "alphas" in list(input_dict.keys()):
 else:
     alphas = [1, 1, 1, 1]
 
+if "model_start" in list(input_dict.keys()):
+    model_start = np.r_[input_dict["model_start"]]
+    assert model_start.shape[0] == 1 or model_start.shape[0] == 3, "Start model needs to be a scalar or 3 component vector"
+else:
+    model_start = 0
+
+if "model_ref" in list(input_dict.keys()):
+    model_ref = np.r_[input_dict["model_ref"]]
+    assert model_ref.shape[0] == 1 or model_ref.shape[0] == 3, "Start model needs to be a scalar or 3 component vector"
+else:
+    model_start = 0
+
 if len(octree_levels_padding) < len(octree_levels_obs):
     octree_levels_padding += octree_levels_obs[len(octree_levels_padding):]
 
@@ -516,14 +528,21 @@ if input_dict["inversion_type"].lower() in ['grav', 'mag']:
         alpha_z=alphas[3]
         )
     reg.norms = np.c_[model_norms].T
-    reg.mref = np.zeros(nC)
+    reg.mref = np.zeros(nC) * model_ref[0]
     reg.cell_weights = wrGlobal
-    mstart = np.zeros(nC)
+    mstart = np.zeros(nC) * model_start[0]
 else:
-    mstart = np.ones(3*nC) * 1e-4
+    if len(model_ref) == 3:
+        mref = np.kron(model_ref, np.ones(nC))
+    else:
+        # Assumes amplitude reference, distributed on 3 components in inducing field direction
+        mref = np.kron(model_ref * Utils.matutils.dipazm_2_xyz(dip=survey.srcField.param[1], azm_N=survey.srcField.param[2])[0,:], np.ones(nC))
 
-    # Assumes amplitude reference, distributed on 3 components
-    mref = np.zeros(3*nC)
+    if len(model_start) == 3:
+        mstart = np.kron(model_start, np.ones(nC))
+    else:
+        # Assumes amplitude reference, distributed on 3 components in inducing field direction
+        mstart = np.kron(model_start * Utils.matutils.dipazm_2_xyz(dip=survey.srcField.param[1], azm_N=survey.srcField.param[2])[0,:], np.ones(nC))
 
     # Create a block diagonal regularization
     wires = Maps.Wires(('p', nC), ('s', nC), ('t', nC))
