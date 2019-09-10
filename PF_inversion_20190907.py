@@ -134,9 +134,8 @@ if input_dict["inversion_type"].lower() in ['grav', 'mag']:
     model_norms = model_norms[:4]
     assert model_norms.shape[0] == 4, "Model norms need at least for values (p_s, p_x, p_y, p_z)"
 else:
-
     assert model_norms.shape[0] == 12, "Model norms needs 12 terms for [a, t, p] x [p_s, p_x, p_y, p_z]"
-
+    
 if "gradient_type" in list(input_dict.keys()):
     gradient_type = input_dict["gradient_type"]
 else:
@@ -304,7 +303,7 @@ def createLocalMesh(rxLoc, ind_t):
 
         # Utils.io_utils.writeUBCgravityObservations(outDir + "Tile" + str(ind) + '.dat', survey_t, survey_t.dobs)
 
-    elif input_dict["inversion_type"].lower() in ['mag', 'mvi']:
+    elif input_dict["inversion_type"].lower() in ['mag', 'mvi', 'mvis']:
         rxLoc_t = PF.BaseMag.RxObs(rxLoc[ind_t, :])
         srcField = PF.BaseMag.SrcField([rxLoc_t], param=survey.srcField.param)
         survey_t = PF.BaseMag.LinearSurvey(srcField, components=survey.components)
@@ -391,7 +390,7 @@ nC = int(activeCells.sum())  # Number of active cells
 activeCellsMap = Maps.InjectActiveCells(mesh, activeCells, ndv)
 
 # Create identity map
-if input_dict["inversion_type"].lower() == 'mvi':
+if input_dict["inversion_type"].lower() in ['mvi', 'mvis']:
     wrGlobal = np.zeros(3*nC)
 else:
     idenMap = Maps.IdentityMap(nP=nC)
@@ -407,7 +406,7 @@ def createLocalProb(meshLocal, survey_t, wrGlobal, ind):
     activeCells_t = np.ones(meshLocal.nC, dtype='bool')  # meshUtils.modelutils.activeTopoLayer(meshLocal, topo)
 
     # Create reduced identity map
-    if input_dict["inversion_type"].lower() == 'mvi':
+    if input_dict["inversion_type"].lower() in ['mvi', 'mvis']:
         nBlock = 3
     else:
         nBlock = 1
@@ -452,7 +451,7 @@ def createLocalProb(meshLocal, survey_t, wrGlobal, ind):
             n_cpu=n_cpu,
             )
 
-    elif input_dict["inversion_type"].lower() == 'mvi':
+    elif input_dict["inversion_type"].lower() in ['mvi', 'mvis']:
         prob = PF.Magnetics.MagneticIntegral(
             meshLocal, chiMap=tileMap, actInd=activeCells_t,
             parallelized=parallelized,
@@ -561,15 +560,14 @@ opt = Optimization.ProjectedGNCG(maxIter=25, lower=-np.inf,
 invProb = InvProblem.BaseInvProblem(ComboMisfit, reg, opt)
 
 # Specify how the initial beta is found
-# if input_dict["inversion_type"].lower() == 'mvi':
+# if input_dict["inversion_type"].lower() in ['mvi', 'mvis']:
 betaest = Directives.BetaEstimate_ByEig(beta0_ratio=1e+1)
 
 # Pre-conditioner
 update_Jacobi = Directives.UpdatePreconditioner()
 
-if (input_dict["inversion_type"].lower() == 'mvi') or (np.all(model_norms==2)):
+if (input_dict["inversion_type"].lower() in ['mvi', 'mvis']) or (np.all(model_norms==2)):
     maxIRLSiter = 1
-
 else:
     maxIRLSiter = 20
 
@@ -581,18 +579,24 @@ IRLS = Directives.Update_IRLS(
 # Save model
 saveIt = Directives.SaveUBCModelEveryIteration(
     mapping=activeCellsMap, fileName=outDir + input_dict["inversion_type"].lower(),
-    vector=input_dict["inversion_type"].lower() == 'mvi'
+    vector=input_dict["inversion_type"].lower()[0:3] == 'mvi'
 )
 
 # Put all the parts together
 inv = Inversion.BaseInversion(invProb,
                               directiveList=[saveIt, betaest, IRLS, update_Jacobi])
 
+# SimPEG reports half phi_d, so we scale to matrch
+print("Start Inversion\nTarget Misfit: %.2e (%.0f data with chifact = %g)" % (0.5*target_chi*len(survey.std), len(survey.std), target_chi))
+
 # Run the inversion
 mrec = inv.run(mstart)
 
+print("Target Misfit: %.3e (%.0f data with chifact = %g)" % (0.5*target_chi*len(survey.std), len(survey.std), target_chi))
+print("Final Misfit:  %.3e" % (0.5 * np.sum(((survey.dobs - invProb.dpred)/survey.std)**2.)))
+
 # Repeat inversion in spherical
-if input_dict["inversion_type"].lower() == 'mvi':
+if input_dict["inversion_type"].lower() == 'mvis':
     # Extract the vector components for the MVI-S
     x = activeCellsMap * (wires.p * invProb.model)
     y = activeCellsMap * (wires.s * invProb.model)
@@ -691,8 +695,11 @@ if input_dict["inversion_type"].lower() == 'mvi':
                                     ])
 
     # Run the inversion
+    print("Run Spherical inversion")
     mrec_S = inv.run(mstart)
 
+    print("Target Misfit: %.3e (%.0f data with chifact = %g)" % (0.5*target_chi*len(survey.std), len(survey.std), target_chi))
+    print("Final Misfit:  %.3e" % (0.5 * np.sum(((survey.dobs - invProb.dpred)/survey.std)**2.)))
 
 # Ouput result
 # Mesh.TreeMesh.writeUBC(
@@ -711,7 +718,7 @@ if input_dict["inversion_type"].lower() == 'grav':
 
     Utils.io_utils.writeUBCgravityObservations(outDir + 'Predicted.dat', survey, dpred)
 
-elif input_dict["inversion_type"].lower() in ['mvi', 'mag']:
+elif input_dict["inversion_type"].lower() in ['mvi', 'mvis', 'mag']:
 
     Utils.io_utils.writeUBCmagneticsObservations(outDir + 'Predicted.dat', survey, dpred)
 
