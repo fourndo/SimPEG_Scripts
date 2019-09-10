@@ -220,7 +220,7 @@ if len(octree_levels_padding) < len(octree_levels_obs):
 if "core_cell_size" in list(input_dict.keys()):
     core_cell_size = input_dict["core_cell_size"]
 else:
-    asser("'core_cell_size' must be added to the inputs")
+    assert("'core_cell_size' must be added to the inputs")
 
 if "depth_core" in list(input_dict.keys()):
     depth_core = input_dict["depth_core"]
