@@ -66,6 +66,8 @@ topo = False
 ndv = -100
 
 os.system('mkdir ' + outDir)
+
+###############################################################################
 # Deal with the data
 if input_dict["data_type"].lower() == 'ubc_grav':
 
@@ -95,10 +97,33 @@ else:
 
     assert False, "PF Inversion only implemented for 'data_type' 'ubc_grav' | 'ubc_mag' | 'ftmg' "
 
-if survey.std is None:
+# 0-level the data if required, d0 = 0 level
+d0 = 0.0
+if "subtract_mean" in list(input_dict.keys()) and input_dict["data_type"].lower() in ['ubc_mag', 'ubc_grav']:
+    subtract_mean = input_dict["subtract_mean"]
+    if subtract_mean:
+        d0 = np.mean(survey.dobs)
+        survey.dobs -= d0
+        print('Removed data mean: {0:.6g}'.format(d0))
+else:
+    subtract_mean = False
 
-    survey.std = survey.dobs * 0 + 10 #
+# Update the specified data uncertainty
+if "new_uncert" in list(input_dict.keys()) and input_dict["data_type"].lower() in ['ubc_mag', 'ubc_grav']:
+    new_uncert = input_dict["new_uncert"]
+else:
+    new_uncert = [-1, -1]
 
+if len(new_uncert) == 2 and all(np.asarray(new_uncert) > 0):
+    survey.std = np.maximum(abs(new_uncert[0]*survey.dobs),new_uncert[1])
+    
+elif survey.std is None:
+    survey.std = survey.dobs * 0 + 10 # Default
+
+print('Min uncert: {0:.6g} nT'.format(survey.std.min()))
+
+###############################################################################
+# Manage other inputs
 if "mesh_file" in list(input_dict.keys()):
     meshInput = Mesh.TreeMesh.readUBC(workDir + input_dict["mesh_file"])
 else:
@@ -217,6 +242,9 @@ if parallelized == 'dask':
     dask.config.set({'array.chunk-size': '256MiB'})
     dask.config.set(scheduler='threads')
     dask.config.set(num_workers=n_cpu)
+
+###############################################################################
+# Processing
 
 rxLoc = survey.rxLoc
 
@@ -597,7 +625,7 @@ IRLS = Directives.Update_IRLS(
 
 # Save model
 saveIt = Directives.SaveUBCModelEveryIteration(
-    mapping=activeCellsMap, fileName=outDir + input_dict["inversion_type"].lower(),
+    mapping=activeCellsMap, fileName=outDir + input_dict["inversion_type"].lower() + "_C",
     vector=input_dict["inversion_type"].lower()[0:3] == 'mvi'
 )
 
@@ -632,7 +660,7 @@ if input_dict["inversion_type"].lower() == 'mvis':
         dpred = ComboMisfit.survey.dpred(mrec)
 
     Utils.io_utils.writeUBCmagneticsObservations(
-      outDir + 'MVI_C_pred.pre', survey, dpred
+      outDir + 'MVI_C_pred.pre', survey, dpred+d0
     )
 
     beta = invProb.beta
@@ -735,11 +763,11 @@ else:
 
 if input_dict["inversion_type"].lower() == 'grav':
 
-    Utils.io_utils.writeUBCgravityObservations(outDir + 'Predicted.dat', survey, dpred)
+    Utils.io_utils.writeUBCgravityObservations(outDir + 'Predicted.dat', survey, dpred+d0)
 
 elif input_dict["inversion_type"].lower() in ['mvi', 'mvis', 'mag']:
 
-    Utils.io_utils.writeUBCmagneticsObservations(outDir + 'Predicted.dat', survey, dpred)
+    Utils.io_utils.writeUBCmagneticsObservations(outDir + 'Predicted.dat', survey, dpred+d0)
 
 
 if "forward" in list(input_dict.keys()):
