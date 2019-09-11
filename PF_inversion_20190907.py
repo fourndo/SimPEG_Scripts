@@ -642,6 +642,7 @@ IRLS = Directives.Update_IRLS(
                         betaSearch=False)
 
 # Save model
+saveDict = Directives.SaveOutputEveryIteration(save_txt=False)
 saveIt = Directives.SaveUBCModelEveryIteration(
     mapping=activeCellsMap, fileName=outDir + input_dict["inversion_type"].lower() + "_C",
     vector=input_dict["inversion_type"].lower()[0:3] == 'mvi'
@@ -649,7 +650,7 @@ saveIt = Directives.SaveUBCModelEveryIteration(
 
 # Put all the parts together
 inv = Inversion.BaseInversion(invProb,
-                              directiveList=[saveIt, betaest, IRLS, update_Jacobi])
+                              directiveList=[saveIt, saveDict, betaest, IRLS, update_Jacobi])
 
 # SimPEG reports half phi_d, so we scale to matrch
 print("Start Inversion\nTarget Misfit: %.2e (%.0f data with chifact = %g)" % (0.5*target_chi*len(survey.std), len(survey.std), target_chi))
@@ -659,6 +660,27 @@ mrec = inv.run(mstart)
 
 print("Target Misfit: %.3e (%.0f data with chifact = %g)" % (0.5*target_chi*len(survey.std), len(survey.std), target_chi))
 print("Final Misfit:  %.3e" % (0.5 * np.sum(((survey.dobs - invProb.dpred)/survey.std)**2.)))
+
+if show_graphics:
+    # Plot convergence curves
+    fig, axs = plt.figure(), plt.subplot()
+    axs.plot(saveDict.phi_d, 'ko-', lw=2)
+    phi_d_target = 0.5*target_chi*len(survey.std)
+    left, right = plt.xlim()
+    axs.plot(
+        np.r_[left, right],
+        np.r_[phi_d_target, phi_d_target], 'r--'
+    )
+    plt.yscale('log')
+    
+    twin = axs.twinx()
+    twin.plot(saveDict.phi_m, 'k--', lw=2)
+    plt.autoscale(enable=True, axis='both', tight=True)        
+
+    axs.set_ylabel('$\phi_d$', size=16, rotation=0)
+    axs.set_xlabel('Iterations', size=14)
+    twin.set_ylabel('$\phi_m$', size=16, rotation=0)
+    plt.show(block=False)
 
 # Repeat inversion in spherical
 if input_dict["inversion_type"].lower() == 'mvis':
@@ -750,13 +772,14 @@ if input_dict["inversion_type"].lower() == 'mvis':
     ProjSpherical = Directives.ProjSpherical()
     update_SensWeight = Directives.UpdateSensitivityWeights()
     update_Jacobi = Directives.UpdatePreconditioner()
+    saveDict = Directives.SaveOutputEveryIteration(save_txt=False)
     saveModel = Directives.SaveUBCModelEveryIteration(mapping=activeCellsMap, vector=True)
     saveModel.fileName = outDir + input_dict["inversion_type"].lower() + "_S"
 
     inv = Inversion.BaseInversion(invProb,
                                   directiveList=[
                                     ProjSpherical, IRLS, update_SensWeight,
-                                    update_Jacobi, saveModel
+                                    update_Jacobi, saveModel, saveDict
                                     ])
 
     # Run the inversion
@@ -766,6 +789,39 @@ if input_dict["inversion_type"].lower() == 'mvis':
     print("Target Misfit: %.3e (%.0f data with chifact = %g)" % (0.5*target_chi*len(survey.std), len(survey.std), target_chi))
     print("Final Misfit:  %.3e" % (0.5 * np.sum(((survey.dobs - invProb.dpred)/survey.std)**2.)))
 
+    if show_graphics:
+        # Plot convergence curves
+        fig, axs = plt.figure(), plt.subplot()
+        axs.plot(saveDict.phi_d, 'ko-', lw=2)
+        phi_d_target = 0.5*target_chi*len(survey.std)
+        left, right = plt.xlim()
+        axs.plot(
+            np.r_[left, right],
+            np.r_[phi_d_target, phi_d_target], 'r--'
+        )
+    
+        plt.yscale('log')
+        bottom, top = plt.ylim()
+        axs.plot(
+            np.r_[IRLS.iterStart, IRLS.iterStart],
+            np.r_[bottom, top], 'k:'
+        )
+        
+        twin = axs.twinx()
+        twin.plot(saveDict.phi_m, 'k--', lw=2)
+        plt.autoscale(enable=True, axis='both', tight=True)        
+        axs.text(
+            IRLS.iterStart, top,
+            'IRLS', va='top', ha='center',
+            rotation='vertical', size=12,
+            bbox={'facecolor': 'white'}
+        )
+    
+        axs.set_ylabel('$\phi_d$', size=16, rotation=0)
+        axs.set_xlabel('Iterations', size=14)
+        twin.set_ylabel('$\phi_m$', size=16, rotation=0)
+        plt.show(block=False)
+    
 # Ouput result
 # Mesh.TreeMesh.writeUBC(
 #       mesh, outDir + 'OctreeMeshGlobal.msh',
