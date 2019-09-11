@@ -162,6 +162,17 @@ if input_dict["inversion_type"].lower() in ['grav', 'mag']:
 else:
     assert model_norms.shape[0] == 12, "Model norms needs 12 terms for [a, t, p] x [p_s, p_x, p_y, p_z]"
     
+if "max_IRLS_iter" in list(input_dict.keys()):
+    max_IRLS_iter = input_dict["max_IRLS_iter"]
+    assert max_IRLS_iter >= 0, "Max IRLS iterations must be >= 0"
+else:
+    if (input_dict["inversion_type"].lower() != 'mvis') or (np.all(model_norms==2)):
+        # Cartesian or not sparse
+        max_IRLS_iter = 0
+    else:
+        # Spherical or sparse 
+        max_IRLS_iter = 20    
+
 if "gradient_type" in list(input_dict.keys()):
     gradient_type = input_dict["gradient_type"]
 else:
@@ -631,14 +642,9 @@ betaest = Directives.BetaEstimate_ByEig(beta0_ratio=1e+1)
 # Pre-conditioner
 update_Jacobi = Directives.UpdatePreconditioner()
 
-if (input_dict["inversion_type"].lower() in ['mvi', 'mvis']) or (np.all(model_norms==2)):
-    maxIRLSiter = 1
-else:
-    maxIRLSiter = 20
-
 IRLS = Directives.Update_IRLS(
                         f_min_change=1e-3, minGNiter=1, beta_tol=0.25,
-                        maxIRLSiter=maxIRLSiter, chifact_target=target_chi,
+                        maxIRLSiter=max_IRLS_iter, chifact_target=target_chi,
                         betaSearch=False)
 
 # Save model
@@ -762,7 +768,7 @@ if input_dict["inversion_type"].lower() == 'mvis':
     #  betaest = Directives.BetaEstimate_ByEig()
 
     # Here is where the norms are applied
-    IRLS = Directives.Update_IRLS(f_min_change=1e-4, maxIRLSiter=40,
+    IRLS = Directives.Update_IRLS(f_min_change=1e-4, maxIRLSiter=max_IRLS_iter,
                                   minGNiter=1, beta_tol=0.5, prctile=100,
                                   coolingRate=1, coolEps_q=True,
                                   betaSearch=False)
