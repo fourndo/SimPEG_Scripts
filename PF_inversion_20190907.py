@@ -119,7 +119,7 @@ else:
     new_uncert = False
     
 if survey.std is None:
-    survey.std = survey.dobs * 0 + 10 # Default
+    survey.std = survey.dobs * 0 + 1 # Default
 
 print('Min uncert: {0:.6g} nT'.format(survey.std.min()))
 
@@ -219,11 +219,11 @@ if "model_start" in list(input_dict.keys()):
 else:
     model_start = 0
 
-if "model_ref" in list(input_dict.keys()):
-    model_ref = np.r_[input_dict["model_ref"]]
-    assert model_ref.shape[0] == 1 or model_ref.shape[0] == 3, "Start model needs to be a scalar or 3 component vector"
+if "model_reference" in list(input_dict.keys()):
+    model_reference = np.r_[input_dict["model_reference"]]
+    assert model_reference.shape[0] == 1 or model_reference.shape[0] == 3, "Start model needs to be a scalar or 3 component vector"
 else:
-    model_start = 0
+    model_reference = 0
 
 if len(octree_levels_padding) < len(octree_levels_obs):
     octree_levels_padding += octree_levels_obs[len(octree_levels_padding):]
@@ -585,15 +585,15 @@ if input_dict["inversion_type"].lower() in ['grav', 'mag']:
         alpha_z=alphas[3]
         )
     reg.norms = np.c_[model_norms].T
-    reg.mref = np.zeros(nC) * model_ref[0]
+    reg.mref = np.zeros(nC) * model_reference[0]
     reg.cell_weights = wrGlobal
     mstart = np.zeros(nC) * model_start[0]
 else:
-    if len(model_ref) == 3:
-        mref = np.kron(model_ref, np.ones(nC))
+    if len(model_reference) == 3:
+        mref = np.kron(model_reference, np.ones(nC))
     else:
         # Assumes amplitude reference, distributed on 3 components in inducing field direction
-        mref = np.kron(model_ref * Utils.matutils.dipazm_2_xyz(dip=survey.srcField.param[1], azm_N=survey.srcField.param[2])[0,:], np.ones(nC))
+        mref = np.kron(model_reference * Utils.matutils.dipazm_2_xyz(dip=survey.srcField.param[1], azm_N=survey.srcField.param[2])[0,:], np.ones(nC))
 
     if len(model_start) == 3:
         mstart = np.kron(model_start, np.ones(nC))
