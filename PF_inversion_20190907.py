@@ -112,13 +112,13 @@ else:
 # Update the specified data uncertainty
 if "new_uncert" in list(input_dict.keys()) and input_dict["data_type"].lower() in ['ubc_mag', 'ubc_grav']:
     new_uncert = input_dict["new_uncert"]
+    if new_uncert != False:
+        assert (len(new_uncert) == 2 and all(np.asarray(new_uncert) >= 0)), "New uncertainty requires pct fraction (0-1) and floor."
+        survey.std = np.maximum(abs(new_uncert[0]*survey.dobs),new_uncert[1])
 else:
-    new_uncert = [-1, -1]
-
-if len(new_uncert) == 2 and all(np.asarray(new_uncert) >= 0):
-    survey.std = np.maximum(abs(new_uncert[0]*survey.dobs),new_uncert[1])
+    new_uncert = False
     
-elif survey.std is None:
+if survey.std is None:
     survey.std = survey.dobs * 0 + 10 # Default
 
 print('Min uncert: {0:.6g} nT'.format(survey.std.min()))
