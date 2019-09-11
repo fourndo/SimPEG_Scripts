@@ -217,13 +217,13 @@ if "model_start" in list(input_dict.keys()):
     model_start = np.r_[input_dict["model_start"]]
     assert model_start.shape[0] == 1 or model_start.shape[0] == 3, "Start model needs to be a scalar or 3 component vector"
 else:
-    model_start = 0
+    model_start = [0.0]
 
 if "model_reference" in list(input_dict.keys()):
     model_reference = np.r_[input_dict["model_reference"]]
     assert model_reference.shape[0] == 1 or model_reference.shape[0] == 3, "Start model needs to be a scalar or 3 component vector"
 else:
-    model_reference = 0
+    model_reference = [0.0]
 
 if len(octree_levels_padding) < len(octree_levels_obs):
     octree_levels_padding += octree_levels_obs[len(octree_levels_padding):]
