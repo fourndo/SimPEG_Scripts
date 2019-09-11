@@ -686,6 +686,9 @@ if show_graphics:
     axs.set_ylabel('$\phi_d$', size=16, rotation=0)
     axs.set_xlabel('Iterations', size=14)
     twin.set_ylabel('$\phi_m$', size=16, rotation=0)
+    t = fig.get_size_inches()
+    fig.set_size_inches(t[0]*2, t[1]*2)
+    fig.savefig(outDir + 'Convergence_curve.png', bbox_inches='tight', dpi=600)
     plt.show(block=False)
 
 # Repeat inversion in spherical
@@ -826,6 +829,9 @@ if input_dict["inversion_type"].lower() == 'mvis':
         axs.set_ylabel('$\phi_d$', size=16, rotation=0)
         axs.set_xlabel('Iterations', size=14)
         twin.set_ylabel('$\phi_m$', size=16, rotation=0)
+        t = fig.get_size_inches()
+        fig.set_size_inches(t[0]*2, t[1]*2)
+        fig.savefig(outDir + 'Convergence_curve_spherical.png', bbox_inches='tight', dpi=600)
         plt.show(block=False)
     
 # Ouput result
