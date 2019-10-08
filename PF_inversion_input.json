@@ -16,5 +16,5 @@
 	"padding_distance": [[1000,1000], [1000,1000], [0,1000]],
 	"depth_core": 2000,
 	"gradient_type":"total",
-	"max_RAM": 3
+	"max_ram": 3,
 }
