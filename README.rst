@@ -30,6 +30,8 @@ The following parameters can be used to modify the octree mesh.
 
 
 [*] List of integers :math:`[nC_1, nC_2, ... ]` ordered from the lowest octree level (smallest cell size)
-to the highest. For instance the list :math:`[2, 6, 10]` will request at least 2
+to the highest. For instance the list :math:`[2, 6, 10]` will request for at least 2
 fine cells (:math:`h_x`), followed by 6 cells at the :math:`2^{th}` level (:math:`2^1*h_x`) followed by
 followed by 10 cells at the :math:`3^{th}` level (:math:`2^2*h_x`).
+
+See the :ref:`refine_tree_xyz <http://discretize.simpeg.xyz/en/master/api/generated/discretize.utils.refine_tree_xyz.html?highlight=refine#discretize-utils-refine-tree-xyz>`_ documentaiton.
