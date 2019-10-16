@@ -34,4 +34,4 @@ to the highest. For instance the list :math:`[2, 6, 10]` will request for at lea
 fine cells (:math:`h_x`), followed by 6 cells at the :math:`2^{th}` level (:math:`2^1*h_x`) followed by
 followed by 10 cells at the :math:`3^{th}` level (:math:`2^2*h_x`).
 
-See the :ref:`refine_tree_xyz <http://discretize.simpeg.xyz/en/master/api/generated/discretize.utils.refine_tree_xyz.html?highlight=refine#discretize-utils-refine-tree-xyz>`_ documentaiton.
+See the `refine_tree_xyz <http://discretize.simpeg.xyz/en/master/api/generated/discretize.utils.refine_tree_xyz.html?highlight=refine#discretize-utils-refine-tree-xyz>`_ documentation for more details and examples.
