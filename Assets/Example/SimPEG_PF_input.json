@@ -1,0 +1,13 @@
+{	"inversion_type":"MVI",
+	"data_type": "ubc_mag",
+	"data_file": "Obs_loc_TMI.obs",
+	"topography": "Gaussian.topo",
+	"target_chi": 1,
+	"core_cell_size": [25,25,25],
+	"octree_levels_topo": [0,3,3],
+	"octree_levels_obs": [5,10,10],
+	"model_norms":[1,2,2,2, 2,0,0,0, 0,0,0,0],
+	"padding_distance": [[1000,1000], [1000,1000], [0,1000]],
+	"gradient_type":"total",
+	"max_RAM":3
+}
