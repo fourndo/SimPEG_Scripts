@@ -28,7 +28,7 @@ The following parameters can be used to modify the octree mesh.
    octree_levels_padding | [*] Number of padding cells inserted horizontally around the data points
    max_distance  		  |  Maximum triangulation distance used by the refinement
    depth_core 		      |  Minimum depth of the mesh below the lowest point
-   padding_distance 	  |  Minimum padding distance along the cartesian axes                                                    |
+   padding_distance 	  |  Minimum padding distance along the cartesian axes
 
 
 [*] List of integers ordered from the lowest octree level (smallest cell size)
