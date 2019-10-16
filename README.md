@@ -7,3 +7,11 @@ To run an inversion, open a command terminal and type:
 
 More documentation to come in 2019!!
 Stay tunes.
+
+
+Notes on Octree creation
+------------------------
+
+
+.. image:: Assets/Octree_refinement.png
+    :alt: Mesh creation parameters
