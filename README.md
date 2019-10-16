@@ -12,6 +12,7 @@ Stay tunes.
 Notes on Octree Mesh
 --------------------
 
-
 .. image:: https://github.com/fourndo/SimPEG_Scripts/blob/master/Assets/Octree_refinement.png
     :alt: Mesh creation parameters
+
+The following parameters can be used to modify the octree mesh.
