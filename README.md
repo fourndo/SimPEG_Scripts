@@ -9,9 +9,9 @@ More documentation to come in 2019!!
 Stay tunes.
 
 
-Notes on Octree creation
-------------------------
+Notes on Octree Mesh
+--------------------
 
 
-.. image:: Assets/Octree_refinement.png
+.. image:: https://github.com/fourndo/SimPEG_Scripts/blob/master/Assets/Octree_refinement.png
     :alt: Mesh creation parameters
