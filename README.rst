@@ -19,22 +19,16 @@ Notes on Octree Mesh
 
 The following parameters can be used to modify the octree mesh.
 
-| First Header  | Second Header |
-| ------------- | ------------- |
-| Content Cell  | Content Cell  |
-| Content Cell  | Content Cell  |
 
-
-
-| Parameters              |  Description                                                             |
-| ----------------------- | -----------------------------------------------------------------------  |
-|   core_cell_size 		  |  Smallest cell size dimension :math:`(h_x, h_y, h_z)`                    |
-|   octree_levels_topo    | [*] Number of cells inserted below topography                            |
-|   octree_levels_obs 	  | [*] Number of cells inserted below the data points                       |
-|   octree_levels_padding | [*] Number of padding cells inserted horizontally around the data points |
-|   max_distance  		  |  Maximum triangulation distance used by the refinement                   |
-|   depth_core 		      |  Minimum depth of the mesh below the lowest point                        |
-|   padding_distance 	  |  Minimum padding distance along the cartesian axes                       |						 |	[west, east, south, north, top, bottom]                                |
+ Parameters              |  Description
+ ----------------------- | -----------------------------------------------------------------------
+   core_cell_size 		  |  Smallest cell size dimension :math:`(h_x, h_y, h_z)`
+   octree_levels_topo    | [*] Number of cells inserted below topography
+   octree_levels_obs 	  | [*] Number of cells inserted below the data points
+   octree_levels_padding | [*] Number of padding cells inserted horizontally around the data points
+   max_distance  		  |  Maximum triangulation distance used by the refinement
+   depth_core 		      |  Minimum depth of the mesh below the lowest point
+   padding_distance 	  |  Minimum padding distance along the cartesian axes                                                    |
 
 
 [*] List of integers ordered from the lowest octree level (smallest cell size)
