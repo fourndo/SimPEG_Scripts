@@ -20,16 +20,16 @@ Notes on Octree Mesh
 The following parameters can be used to modify the octree mesh.
 
 
-* **core_cell_size 		 ** :  Smallest cell size dimension :math:`(h_x, h_y, h_z)`
-* **octree_levels_topo   ** : [*] Number of cells inserted below topography
-* **octree_levels_obs 	 ** : [*] Number of cells inserted below the data points
-* **octree_levels_padding** : [*] Number of padding cells inserted horizontally around the data points
-* **max_distance  		 ** :  Maximum triangulation distance used by the refinement
-* **depth_core 		     ** :  Minimum depth of the mesh below the lowest point
-* **padding_distance 	 ** :  Minimum padding distance along the cartesian axes
+* **core_cell_size** :  Smallest cell size dimension :math:`(h_x, h_y, h_z)`
+* **octree_levels_topo** : Number of cells inserted below topography [*]
+* **octree_levels_obs** : Number of cells inserted below the data points [*]
+* **octree_levels_padding** : Number of padding cells inserted horizontally around the data points [*]
+* **max_distance** :  Maximum triangulation distance used by the refinement
+* **depth_core** :  Minimum depth of the mesh below the lowest point
+* **padding_distance** :  Minimum padding distance along the cartesian axes
 
 
-[*] List of integers ordered from the lowest octree level (smallest cell size)
-to the highest. For instance the list [2, 6, 10] would require at least 2
+[*] List of integers :math:`[nC_1, nC_2, ... ]` ordered from the lowest octree level (smallest cell size)
+to the highest. For instance the list :math:`[2, 6, 10]` will request at least 2
 fine cells (:math:`h_x`), followed by 6 cells at the :math:`2^{th}` level (:math:`2^1*h_x`) followed by
 followed by 10 cells at the :math:`3^{th}` level (:math:`2^2*h_x`).
