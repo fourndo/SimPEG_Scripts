@@ -36,7 +36,7 @@ input_file = sys.argv[1]
 
 if input_file is not None:
     workDir = dsep.join(
-                input_file.split(dsep)[:-1]
+                os.path.dirname(os.path.abspath(input_file)).split(dsep)
             )
     if len(workDir) > 0:
         workDir += dsep
@@ -53,9 +53,10 @@ input_dict = dict((k.lower(), driver[k]) for k in list(driver.keys()))
 
 
 if "result_folder" in list(input_dict.keys()):
-    outDir = workDir + dsep + input_dict["result_folder"] + dsep
+    outDir = os.path.relpath(input_dict["result_folder"], workDir) + dsep
 else:
     outDir = workDir + dsep + "SimPEG_PFInversion" + dsep
+
 
 
 # Default parameter values
@@ -117,7 +118,7 @@ if "new_uncert" in list(input_dict.keys()) and input_dict["data_type"].lower() i
         survey.std = np.maximum(abs(new_uncert[0]*survey.dobs),new_uncert[1])
 else:
     new_uncert = False
-    
+
 if survey.std is None:
     survey.std = survey.dobs * 0 + 1 # Default
 
@@ -161,7 +162,7 @@ if input_dict["inversion_type"].lower() in ['grav', 'mag']:
     assert model_norms.shape[0] == 4, "Model norms need at least for values (p_s, p_x, p_y, p_z)"
 else:
     assert model_norms.shape[0] == 12, "Model norms needs 12 terms for [a, t, p] x [p_s, p_x, p_y, p_z]"
-    
+
 if "max_IRLS_iter" in list(input_dict.keys()):
     max_IRLS_iter = input_dict["max_IRLS_iter"]
     assert max_IRLS_iter >= 0, "Max IRLS iterations must be >= 0"
@@ -170,8 +171,8 @@ else:
         # Cartesian or not sparse
         max_IRLS_iter = 0
     else:
-        # Spherical or sparse 
-        max_IRLS_iter = 20    
+        # Spherical or sparse
+        max_IRLS_iter = 20
 
 if "gradient_type" in list(input_dict.keys()):
     gradient_type = input_dict["gradient_type"]
@@ -427,7 +428,7 @@ else:
 if show_graphics:
     # Plot a slice
     slicePosition = rxLoc[:, 1].mean()
-    
+
     sliceInd = int(round(np.searchsorted(mesh.vectorCCy, slicePosition)))
     fig, ax1 = plt.figure(), plt.subplot()
     im = mesh.plotSlice(np.log10(mesh.vol), normal='Y', ax=ax1, ind=sliceInd, grid=True, pcolorOpts={"cmap":"plasma"})
@@ -678,10 +679,10 @@ if show_graphics:
         np.r_[phi_d_target, phi_d_target], 'r--'
     )
     plt.yscale('log')
-    
+
     twin = axs.twinx()
     twin.plot(saveDict.phi_m, 'k--', lw=2)
-    plt.autoscale(enable=True, axis='both', tight=True)        
+    plt.autoscale(enable=True, axis='both', tight=True)
 
     axs.set_ylabel('$\phi_d$', size=16, rotation=0)
     axs.set_xlabel('Iterations', size=14)
@@ -808,24 +809,24 @@ if input_dict["inversion_type"].lower() == 'mvis':
             np.r_[left, right],
             np.r_[phi_d_target, phi_d_target], 'r--'
         )
-    
+
         plt.yscale('log')
         bottom, top = plt.ylim()
         axs.plot(
             np.r_[IRLS.iterStart, IRLS.iterStart],
             np.r_[bottom, top], 'k:'
         )
-        
+
         twin = axs.twinx()
         twin.plot(saveDict.phi_m, 'k--', lw=2)
-        plt.autoscale(enable=True, axis='both', tight=True)        
+        plt.autoscale(enable=True, axis='both', tight=True)
         axs.text(
             IRLS.iterStart, top,
             'IRLS', va='top', ha='center',
             rotation='vertical', size=12,
             bbox={'facecolor': 'white'}
         )
-    
+
         axs.set_ylabel('$\phi_d$', size=16, rotation=0)
         axs.set_xlabel('Iterations', size=14)
         twin.set_ylabel('$\phi_m$', size=16, rotation=0)
@@ -833,7 +834,7 @@ if input_dict["inversion_type"].lower() == 'mvis':
         fig.set_size_inches(t[0]*2, t[1]*2)
         fig.savefig(outDir + 'Convergence_curve_spherical.png', bbox_inches='tight', dpi=600)
         plt.show(block=False)
-    
+
 # Ouput result
 # Mesh.TreeMesh.writeUBC(
 #       mesh, outDir + 'OctreeMeshGlobal.msh',
