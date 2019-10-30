@@ -7,8 +7,27 @@ To run an inversion, open a command terminal and type:
 
 ``python PF_inversion.py your_project_directory\PF_inversion_input.json``
 
+Mandatory
+---------
+
+* **data_type**: Data file format, either "ubc_grav", "ubc_mag"
+* **data_type**
+
+
+Optional
+--------
+
+[DEFAULT]
+
+* "result_folder": Directory used to output the results ["SimPEG_PFInversion"]
+* "subtract_mean": Mean data value to be subtracted from the input values.
+* "new_uncert": [Percent, floor] Values to be used for uncertainties.
+
+
 More documentation to come in 2019!!
 Stay tunes.
+
+
 
 
 Notes on Octree Mesh

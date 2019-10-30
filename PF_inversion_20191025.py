@@ -127,7 +127,19 @@ print('Min uncert: {0:.6g} nT'.format(survey.std.min()))
 ###############################################################################
 # Manage other inputs
 if "mesh_file" in list(input_dict.keys()):
-    meshInput = Mesh.TreeMesh.readUBC(workDir + input_dict["mesh_file"])
+
+    # Determine if the mesh is tensor or tree
+    fid = open(workDir + input_dict["mesh_file"], 'r')
+    for ii in range(6):
+        line = fid.readline()
+    fid.close()
+
+    if line:
+        meshInput = Mesh.TreeMesh.readUBC(workDir + input_dict["mesh_file"])
+    else:
+        meshInput = Mesh.TensorMesh.readUBC(workDir + input_dict["mesh_file"])
+
+
 else:
     meshInput = None
 
@@ -144,6 +156,11 @@ else:
     topo = meshInput.gridCC[indTop, :]
     topo[:, 2] += meshInput.hz.min()/2. + 1e-8
     F = NearestNDInterpolator(topo[:, :2], topo[:, 2])
+
+if "drape_data" in list(input_dict.keys()):
+    rxLoc = survey.rxLoc
+    z = F(rxLoc[:, 0], rxLoc[:, 1]) + input_dict["drape_data"]
+    survey.srcField.rxList[0].locs = np.c_[rxLoc[:, :2], z]
 
 if "target_chi" in list(input_dict.keys()):
     target_chi = input_dict["target_chi"]
@@ -163,16 +180,19 @@ if input_dict["inversion_type"].lower() in ['grav', 'mag']:
 else:
     assert model_norms.shape[0] == 12, "Model norms needs 12 terms for [a, t, p] x [p_s, p_x, p_y, p_z]"
 
-if "max_IRLS_iter" in list(input_dict.keys()):
-    max_IRLS_iter = input_dict["max_IRLS_iter"]
-    assert max_IRLS_iter >= 0, "Max IRLS iterations must be >= 0"
+
+if "max_irls_iter" in list(input_dict.keys()) and not input_dict["inversion_type"].lower() == 'mvis':
+
+    max_irls_iter = input_dict["max_irls_iter"]
+    assert max_irls_iter >= 0, "Max IRLS iterations must be >= 0"
 else:
-    if (input_dict["inversion_type"].lower() != 'mvis') or (np.all(model_norms==2)):
+    if (input_dict["inversion_type"].lower() == 'mvis' or np.all(model_norms==2)):
         # Cartesian or not sparse
-        max_IRLS_iter = 0
+        max_irls_iter = 0
+
     else:
         # Spherical or sparse
-        max_IRLS_iter = 20
+        max_irls_iter = 20
 
 if "gradient_type" in list(input_dict.keys()):
     gradient_type = input_dict["gradient_type"]
@@ -456,9 +476,14 @@ if show_graphics:
 print("Calculating global active cells from topo")
 activeCells = Utils.surface2ind_topo(mesh, topo, gridLoc='CC')
 
-Mesh.TreeMesh.writeUBC(
-      mesh, outDir + 'OctreeMeshGlobal.msh',
-      models={outDir + 'ActiveSurface.act': activeCells}
+if isinstance(mesh, Mesh.TreeMesh):
+    Mesh.TreeMesh.writeUBC(
+          mesh, outDir + 'OctreeMeshGlobal.msh',
+          models={outDir + 'ActiveSurface.act': activeCells}
+        )
+else:
+    mesh.writeModelUBC(
+          'ActiveSurface.act', activeCells
     )
 
 if "adjust_clearance" in list(input_dict.keys()):
@@ -577,7 +602,7 @@ def createLocalProb(meshLocal, local_survey, global_weights, ind):
 if tiled_inversion:
     for ind, (local_mesh, local_survey) in enumerate(zip(local_meshes, local_surveys)):
 
-        print("Tile " + str(tt+1) + " of " + str(X1.shape[0]))
+        print("Tile " + str(ind+1) + " of " + str(X1.shape[0]))
 
         local_misfit, global_weights = createLocalProb(local_mesh, local_survey, global_weights, ind)
 
@@ -595,6 +620,12 @@ else:
 # Global sensitivity weights (linear)
 global_weights = global_weights**0.5
 global_weights = (global_weights/np.max(global_weights))
+
+print(outDir + 'SensWeights.mod')
+Mesh.TreeMesh.writeUBC(
+          mesh, outDir + 'OctreeMeshGlobal.msh',
+          models={outDir + 'SensWeights.mod': activeCellsMap*global_weights[:nC]}
+        )
 
 
 if input_dict["inversion_type"].lower() in ['grav', 'mag']:
@@ -710,7 +741,7 @@ update_Jacobi = Directives.UpdatePreconditioner()
 
 IRLS = Directives.Update_IRLS(
                         f_min_change=1e-3, minGNiter=1, beta_tol=0.25,
-                        maxIRLSiter=max_IRLS_iter, chifact_target=target_chi,
+                        maxIRLSiter=max_irls_iter, chifact_target=target_chi,
                         betaSearch=False)
 
 # Save model
@@ -759,6 +790,19 @@ if show_graphics:
 
 # Repeat inversion in spherical
 if input_dict["inversion_type"].lower() == 'mvis':
+
+    if "max_irls_iter" in list(input_dict.keys()):
+        max_irls_iter = input_dict["max_irls_iter"]
+        assert max_irls_iter >= 0, "Max IRLS iterations must be >= 0"
+    else:
+        if np.all(model_norms==2):
+            # Cartesian or not sparse
+            max_irls_iter = 0
+
+        else:
+            # Spherical or sparse
+            max_irls_iter = 20
+
     # Extract the vector components for the MVI-S
     x = activeCellsMap * (wires.p * invProb.model)
     y = activeCellsMap * (wires.s * invProb.model)
@@ -819,6 +863,7 @@ if input_dict["inversion_type"].lower() == 'mvis':
     reg_t.space = 'spherical'
     reg_t.norms = model_norms[4:8].T
     reg_t.mref = mref
+    reg_t.eps_q = np.pi
 
     reg_p = Regularization.Sparse(
         mesh, indActive=activeCells,
@@ -832,6 +877,7 @@ if input_dict["inversion_type"].lower() == 'mvis':
     reg_p.space = 'spherical'
     reg_p.norms = model_norms[8:].T
     reg_p.mref = mref
+    reg_p.eps_q = np.pi
 
     # Assemble the three regularization
     reg = reg_a + reg_t + reg_p
@@ -852,11 +898,10 @@ if input_dict["inversion_type"].lower() == 'mvis':
 
     invProb = InvProblem.BaseInvProblem(global_misfit, reg, opt, beta=beta*3)
     #  betaest = Directives.BetaEstimate_ByEig()
-
     # Here is where the norms are applied
-    IRLS = Directives.Update_IRLS(f_min_change=1e-4, maxIRLSiter=max_IRLS_iter,
-                                  minGNiter=1, beta_tol=0.5, prctile=100,
-                                  coolingRate=1, coolEps_q=True,
+    IRLS = Directives.Update_IRLS(f_min_change=1e-4, maxIRLSiter=max_irls_iter,
+                                  minGNiter=1, beta_tol=0.5, prctile=90, floorEpsEnforced=True,
+                                  coolingRate=1, coolEps_q=True, coolEpsFact=1.2,
                                   betaSearch=False)
 
     # Special directive specific to the mag amplitude problem. The sensitivity
