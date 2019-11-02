@@ -869,21 +869,8 @@ if input_dict["inversion_type"].lower() == 'mvis':
 #       models={outDir + input_dict["inversion_type"].lower() + '.mod': activeCellsMap * invProb.model}
 #     )
 
-if getattr(ComboMisfit, 'objfcts', None) is not None:
-    dpred = np.zeros(survey.nD)
-    for ind, dmis in enumerate(ComboMisfit.objfcts):
-        dpred[dmis.survey.ind] += dmis.survey.dpred(mrec).compute()
-else:
-    dpred = ComboMisfit.survey.dpred(mrec)
-
-if input_dict["inversion_type"].lower() == 'grav':
-
-    Utils.io_utils.writeUBCgravityObservations(outDir + 'Predicted.dat', survey, dpred+d0)
-
-elif input_dict["inversion_type"].lower() in ['mvi', 'mvis', 'mag']:
-
-    Utils.io_utils.writeUBCmagneticsObservations(outDir + 'Predicted.dat', survey, dpred+d0)
-
+###############################################################################
+# FORWARD
 
 if "forward" in list(input_dict.keys()):
     if input_dict["forward"][0] == "DRAPE":
