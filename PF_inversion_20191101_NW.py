@@ -626,13 +626,13 @@ if input_dict["inversion_type"].lower() in ['grav', 'mag']:
         mref = mesh.readModelUBC(workDir + model_reference)
         reg.mref = mref[activeCells]
     else:
-        reg.mref = np.zeros(nC) * model_reference[0]
+        reg.mref = np.ones(nC) * model_reference[0]
 
     if isinstance(model_start, str):
         mstart = mesh.readModelUBC(workDir + model_start)
         mstart = mstart[activeCells]
     else:
-        mstart = np.zeros(nC) * model_start[0]
+        mstart = np.ones(nC) * model_start[0]
 
 else:
 
