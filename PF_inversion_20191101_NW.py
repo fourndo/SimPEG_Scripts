@@ -590,9 +590,9 @@ if input_dict["inversion_type"].lower() in ['grav', 'mag']:
         alpha_z=alphas[3]
         )
     reg.norms = np.c_[model_norms].T
-    reg.mref = np.zeros(nC) * model_reference[0]
+    reg.mref = np.ones(nC) * model_reference[0]
     reg.cell_weights = wrGlobal
-    mstart = np.zeros(nC) * model_start[0]
+    mstart = np.ones(nC) * model_start[0]
 else:
     if len(model_reference) == 3:
         mref = np.kron(model_reference, np.ones(nC))
