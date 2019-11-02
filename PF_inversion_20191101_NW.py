@@ -216,6 +216,10 @@ else:
 
 if "alphas" in list(input_dict.keys()):
     alphas = input_dict["alphas"]
+    if len(alphas) == 4:
+        alphas = alphas + [0, 1, 1, 1, 0, 1, 1, 1]
+    else:
+        assert len(alphas) == 12, "Alphas require list of 4 or 12 values"
 else:
     alphas = [1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1]
 
