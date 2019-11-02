@@ -696,6 +696,21 @@ if show_graphics:
     fig.savefig(outDir + 'Convergence_curve.png', bbox_inches='tight', dpi=600)
     plt.show(block=False)
 
+if getattr(ComboMisfit, 'objfcts', None) is not None:
+    dpred = np.zeros(survey.nD)
+    for ind, dmis in enumerate(ComboMisfit.objfcts):
+        dpred[dmis.survey.ind] += dmis.survey.dpred(mrec).compute()
+else:
+    dpred = ComboMisfit.survey.dpred(mrec)
+
+if input_dict["inversion_type"].lower() == 'grav':
+
+    Utils.io_utils.writeUBCgravityObservations(outDir + 'Predicted.pre', survey, dpred+d0)
+
+elif input_dict["inversion_type"].lower() in ['mvi', 'mvis', 'mag']:
+
+    Utils.io_utils.writeUBCmagneticsObservations(outDir + 'Predicted.pre', survey, dpred+d0)
+
 # Repeat inversion in spherical
 if input_dict["inversion_type"].lower() == 'mvis':
     # Extract the vector components for the MVI-S
@@ -838,6 +853,15 @@ if input_dict["inversion_type"].lower() == 'mvis':
         fig.set_size_inches(t[0]*2, t[1]*2)
         fig.savefig(outDir + 'Convergence_curve_spherical.png', bbox_inches='tight', dpi=600)
         plt.show(block=False)
+        
+    if getattr(ComboMisfit, 'objfcts', None) is not None:
+        dpred = np.zeros(survey.nD)
+        for ind, dmis in enumerate(ComboMisfit.objfcts):
+            dpred[dmis.survey.ind] += dmis.survey.dpred(mrec_S).compute()
+    else:
+        dpred = ComboMisfit.survey.dpred(mrec_S)
+    
+    Utils.io_utils.writeUBCmagneticsObservations(outDir + 'Predicted_MVI_S.pre', survey, dpred+d0)
     
 # Ouput result
 # Mesh.TreeMesh.writeUBC(
