@@ -643,12 +643,14 @@ else:
         mref[:, -1] *= -1
         mref = mref[activeCells, :]
 
-    else:
-        assert(np.r_[model_reference].shape[0] == 3)
+    elif np.r_[model_reference].shape[0] == 3:
+        # Assumes reference specified as: aAMP, DIP, AZIM
         mref = np.kron(np.c_[model_reference], np.ones(nC)).T
-
-    mref = mkvc(Utils.sdiag(mref[:, 0]) * Utils.matutils.dipazm_2_xyz(mref[:, 1], mref[:, 2]))
-
+        mref = mkvc(Utils.sdiag(mref[:, 0]) * Utils.matutils.dipazm_2_xyz(mref[:, 1], mref[:, 2]))
+    else:
+        # Assumes amplitude reference value in inducing field direction
+        mref = np.kron(np.c_[model_reference[0] * Utils.matutils.dipazm_2_xyz(dip=survey.srcField.param[1], azm_N=survey.srcField.param[2])], np.ones(nC))[0,:]
+        
     if isinstance(model_start, str):
         mstart = Utils.io_utils.readVectorUBC(mesh, workDir + model_start)
 
@@ -656,11 +658,14 @@ else:
         mstart[:, -1] *= -1
         mstart = mstart[activeCells, :]
 
-    else:
-        assert(np.r_[model_start].shape[0] == 3)
+    elif np.r_[model_start].shape[0] == 3:
+        # Assumes start specified as: aAMP, DIP, AZIM
         mstart = np.kron(np.c_[model_start], np.ones(nC)).T
-        print(mstart.shape)
-    mstart = mkvc(Utils.sdiag(mstart[:, 0]) * Utils.matutils.dipazm_2_xyz(mstart[:, 1], mstart[:, 2]))
+        mstart = mkvc(Utils.sdiag(mstart[:, 0]) * Utils.matutils.dipazm_2_xyz(mstart[:, 1], mstart[:, 2]))
+    else:
+        # Assumes amplitude start value in inducing field direction
+        mstart = np.kron(np.c_[model_start[0] * Utils.matutils.dipazm_2_xyz(dip=survey.srcField.param[1], azm_N=survey.srcField.param[2])], np.ones(nC))[0,:]
+
 
     # Create a block diagonal regularization
     wires = Maps.Wires(('p', nC), ('s', nC), ('t', nC))
