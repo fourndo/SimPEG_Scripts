@@ -249,7 +249,11 @@ else:
 if "depth_core" in list(input_dict.keys()):
     depth_core = input_dict["depth_core"]
 else:
-    depth_core = 0
+    xLoc = survey.rxLoc[:, 0]
+    yLoc = survey.rxLoc[:, 1]
+    depth_core = np.max([
+        (xLoc.max()-xLoc.min())/3, (yLoc.max()-yLoc.min())/3
+    ])
 
 if "max_distance" in list(input_dict.keys()):
     max_distance = input_dict["max_distance"]
