@@ -784,11 +784,11 @@ else:
 
 if input_dict["inversion_type"].lower() == 'grav':
 
-    Utils.io_utils.writeUBCgravityObservations(outDir + 'Predicted.pre', survey, dpred+d0)
+    Utils.io_utils.writeUBCgravityObservations(outDir + 'Predicted_' + input_dict["inversion_type"].lower() + '.pre', survey, dpred+d0)
 
 elif input_dict["inversion_type"].lower() in ['mvi', 'mvis', 'mag']:
 
-    Utils.io_utils.writeUBCmagneticsObservations(outDir + 'Predicted.pre', survey, dpred+d0)
+    Utils.io_utils.writeUBCmagneticsObservations(outDir + 'Predicted_' + input_dict["inversion_type"].lower() + '.pre', survey, dpred+d0)
 
 # Repeat inversion in spherical
 if input_dict["inversion_type"].lower() == 'mvis':
@@ -957,7 +957,7 @@ if input_dict["inversion_type"].lower() == 'mvis':
     else:
         dpred = global_misfit.survey.dpred(mrec_S)
     
-    Utils.io_utils.writeUBCmagneticsObservations(outDir + 'Predicted_MVI_S.pre', survey, dpred+d0)
+    Utils.io_utils.writeUBCmagneticsObservations(outDir + 'Predicted_mvis.pre', survey, dpred+d0)
     
 # Ouput result
 # Mesh.TreeMesh.writeUBC(
