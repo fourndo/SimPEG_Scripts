@@ -40,7 +40,10 @@ if input_file is not None:
             )
     if len(workDir) > 0:
         workDir += dsep
-
+    else:
+        workDir = os.getcwd() + dsep
+    print('Working directory:', workDir)
+    
 else:
 
     assert input_file is not None, "The input file is missing: 'python PFinversion.py input_file.json'"
