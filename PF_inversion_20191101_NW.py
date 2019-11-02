@@ -54,6 +54,8 @@ with open(input_file, 'r') as f:
 
 input_dict = dict((k.lower(), driver[k]) for k in list(driver.keys()))
 
+assert "inversion_type" in list(input_dict.keys()), "Require 'inversion_type' to be set: 'grav', 'mag', 'mvi', or 'mvs'"
+assert input_dict["inversion_type"].lower() in ['grav', 'mag', 'mvi', 'mvs'], "'inversion_type' must be one of: 'grav', 'mag', 'mvi', or 'mvs'"
 
 if "result_folder" in list(input_dict.keys()):
     outDir = os.path.relpath(input_dict["result_folder"], workDir) + dsep
