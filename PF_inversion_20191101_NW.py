@@ -67,7 +67,6 @@ else:
 # Default parameter values
 parallelized = 'dask'
 meshType = 'TREE'
-tileProblem = True
 
 topo = False
 ndv = -100
@@ -266,6 +265,8 @@ else:
 
 if "tileProblem" in list(input_dict.keys()):
     tileProblem = input_dict["tileProblem"]
+else:
+    tileProblem = True
 
 if "show_graphics" in list(input_dict.keys()):
     show_graphics = input_dict["show_graphics"]
