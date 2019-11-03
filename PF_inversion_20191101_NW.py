@@ -54,8 +54,8 @@ with open(input_file, 'r') as f:
 
 input_dict = dict((k.lower(), driver[k]) for k in list(driver.keys()))
 
-assert "inversion_type" in list(input_dict.keys()), "Require 'inversion_type' to be set: 'grav', 'mag', 'mvi', or 'mvs'"
-assert input_dict["inversion_type"].lower() in ['grav', 'mag', 'mvi', 'mvs'], "'inversion_type' must be one of: 'grav', 'mag', 'mvi', or 'mvs'"
+assert "inversion_type" in list(input_dict.keys()), "Require 'inversion_type' to be set: 'grav', 'mag', 'mvi', or 'mvis'"
+assert input_dict["inversion_type"].lower() in ['grav', 'mag', 'mvi', 'mvis'], "'inversion_type' must be one of: 'grav', 'mag', 'mvi', or 'mvis'"
 
 if "result_folder" in list(input_dict.keys()):
     outDir = os.path.relpath(input_dict["result_folder"], workDir) + dsep
@@ -788,7 +788,7 @@ if input_dict["inversion_type"].lower() == 'grav':
 
 elif input_dict["inversion_type"].lower() in ['mvi', 'mvis', 'mag']:
 
-    Utils.io_utils.writeUBCmagneticsObservations(outDir + 'Predicted_' + input_dict["inversion_type"].lower() + '.pre', survey, dpred+d0)
+    Utils.io_utils.writeUBCmagneticsObservations(outDir + 'Predicted_' + input_dict["inversion_type"].lower()[0:3] + '.pre', survey, dpred+d0)
 
 # Repeat inversion in spherical
 if input_dict["inversion_type"].lower() == 'mvis':
