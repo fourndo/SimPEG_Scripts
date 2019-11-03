@@ -75,7 +75,14 @@ os.system('mkdir ' + outDir)
 
 ###############################################################################
 # Deal with the data
-if input_dict["data_type"].lower() == 'ubc_grav':
+if "inducing_field_aid" in list(input_dict.keys()):
+    inducing_field_aid = np.asarray(input_dict["inducing_field_aid"])
+    
+    assert (len(inducing_field_aid) == 3 and inducing_field_aid[0] > 0), "Inducing field must include H, INCL, DECL"
+else:
+    inducing_field_aid = None
+
+if input_dict["data_type"].lower() in ['ubc_grav']:
 
     survey = Utils.io_utils.readUBCgravityObservations(workDir + input_dict["data_file"])
 
@@ -88,7 +95,8 @@ elif input_dict["data_type"].lower() in ['ftmg']:
 
     patch = Utils.io_utils.readFTMGdataFile(file_path=workDir + input_dict["data_file"])
     component = input_dict["ftmg_components"]
-    H0 = np.asarray(input_dict["inducing_field_aid"])
+    assert (len(inducing_field_aid) == 3 and inducing_field_aid[0] > 0), "Inducing field required for ftmg"
+    H0 = inducing_field_aid
 
     if "limits" in list(input_dict.keys()):
         limits = input_dict["limits"]
