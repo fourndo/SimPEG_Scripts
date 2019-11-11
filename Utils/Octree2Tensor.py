@@ -14,10 +14,28 @@ ndv = np.asarray(sys.argv[4]).astype(np.float)
 # modelFile = ["MVI_S_TOT_l2222.amp", "MVI_S_TOT_l0222.amp"]
 meshTensor = Mesh.TensorMesh.readUBC(meshTensorFile)
 
-
 meshOctree = Mesh.TreeMesh.readUBC(meshOctreeFile)
 
-model = meshOctree.readModelUBC(modelOctreeFile)
+if len(sys.argv) > 4:
+    ndv = np.asarray(sys.argv[4]).astype(np.float)
+else:
+    ndv = -99999
+
+if len(sys.argv) > 5:
+    vec = True
+else:
+    vec = False
+
+
+if vec:
+    # vec_model = np.loadtxt(modelOctreeFile)
+
+
+    vec_model = Utils.io_utils.readVectorUBC(meshOctree, modelOctreeFile)
+
+
+else:
+    model = meshOctree.readModelUBC(modelOctreeFile)
 
 # indAct = model != np.asarray(ndv)
 
@@ -25,12 +43,23 @@ tree = cKDTree(meshOctree.gridCC)
 
 dd, ind = tree.query(meshTensor.gridCC)
 
+if vec:
 
-mOut = np.ones(meshTensor.nC)*ndv
-mOut = model[ind]
+    mOut = vec_model[ind, :]
 
+else:
+    mOut = np.ones(meshTensor.nC)*ndv
+    mOut = model[ind]
 
-meshTensor.writeModelUBC(modelOctreeFile[:-4] + "_TENSOR" + modelOctreeFile[-4:], mOut)
+if vec:
+    Utils.io_utils.writeVectorUBC(
+        meshTensor,
+        modelOctreeFile[:-4] + '_TENSOR' + modelOctreeFile[-4:],
+        mOut
+    )
+
+else:
+    meshTensor.writeModelUBC(modelOctreeFile[:-4] + "_TENSOR" + modelOctreeFile[-4:], mOut)
 
 print("Export model file " + modelOctreeFile[:-4] + "_TENSOR" + modelOctreeFile[-4:] + " completed!" )
 
