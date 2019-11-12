@@ -52,7 +52,7 @@ def readGeosoftGrid(gridname, topo, survey_altitude, data_type, inducing_field_a
         print('Failed to read Geosoft grid')
         sys.exit(1)
 
-    newLocs = np.reshape(GsftGrid_values[:, :, :3],(GsftGrid_nx * GsftGrid_ny, 3))
+    newLocs = np.reshape(GsftGrid_values,(GsftGrid_nx * GsftGrid_ny, 4))
     newLocs_mask = ~np.isnan(np.reshape(GsftGrid_values[:, :, 3],(GsftGrid_nx * GsftGrid_ny, 1)))
     newLocs = newLocs[newLocs_mask.squeeze(),:]
     max_distance = max([5 * GsftGrid_props.get('dx', None), 500]) # Only used to minimize the extent of topo resampling for large problems
@@ -66,17 +66,17 @@ def readGeosoftGrid(gridname, topo, survey_altitude, data_type, inducing_field_a
     newLocs[:,2] = F(newLocs[:,:2])
     if data_type == 'geosoft_mag':
         # Mag only
-        rxLocNew = PF.BaseMag.RxObs(newLocs)
+        rxLocNew = PF.BaseMag.RxObs(newLocs[:,:3])
         # retain TF, but update inc-dec to vertical field
         srcField = PF.BaseMag.SrcField([rxLocNew], param=inducing_field_aid)
         survey = PF.BaseMag.LinearSurvey(srcField, components=['tmi'])
-        survey.dobs = newLocs[:,2]
+        survey.dobs = newLocs[:,3]
     else:
         # Grav only
-        rxLoc = PF.BaseGrav.RxObs(newLocs)
+        rxLoc = PF.BaseGrav.RxObs(newLocs[:,:3])
         srcField = PF.BaseGrav.SrcField([rxLoc])
         survey = PF.BaseGrav.LinearSurvey(srcField)
-        survey.dobs = -newLocs[:,2]
+        survey.dobs = -newLocs[:,3]
         
     _, ax1 = plt.figure(), plt.subplot()
     plt.scatter(newLocs[:,0], newLocs[:,1], s=0.01, marker='.',c=newLocs[:,2])
