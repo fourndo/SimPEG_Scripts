@@ -535,8 +535,13 @@ if tiled_inversion:
     while usedRAM > max_ram:
         print("Tiling:" + str(count))
 
-        tiles, binCount, tileIDs, tile_numbers = Utils.modelutils.tileSurveyPoints(rxLoc, count)
-
+        if rxLoc.shape[0] > 40000:
+            # Default clustering algorithm goes slow on large data files, so switch to simple method
+            tiles, binCount, tileIDs, tile_numbers = Utils.modelutils.tileSurveyPoints(rxLoc, count, method=None)
+        else:
+            # Use clustering
+            tiles, binCount, tileIDs, tile_numbers = Utils.modelutils.tileSurveyPoints(rxLoc, count)
+            
         # Grab the smallest bin and generate a temporary mesh
         indMax = np.argmax(binCount)
 
