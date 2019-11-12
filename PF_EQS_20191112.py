@@ -128,7 +128,7 @@ if "result_folder" in list(input_dict.keys()):
 else:
     outDir = workDir + dsep + "SimPEG_PFInversion" + dsep
 
-os.system('mkdir ' + outDir)
+os.system('mkdir ' + '"' + outDir+ '"') # extra quotes included in case path contains spaces
 
 ###############################################################################
 # Deal with the EQS Settings
