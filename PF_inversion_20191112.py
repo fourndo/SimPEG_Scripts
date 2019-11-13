@@ -122,7 +122,6 @@ if "detrend" in list(input_dict.keys()) and input_dict["data_type"] in ['ubc_mag
         # Extract all points
         pts = np.c_[survey.srcField.rxList[0].locs[:,:2], survey.dobs]
 
-    print(trend_order)
     if trend_order == 0:
         data_trend = np.mean(pts[:,2]) * np.ones(rxLoc[:,0].shape)
         print('Removed data mean: {0:.6g}'.format(data_trend[0]))
@@ -154,17 +153,7 @@ if "detrend" in list(input_dict.keys()) and input_dict["data_type"] in ['ubc_mag
         Utils.io_utils.writeUBCgravityObservations(os.path.splitext(workDir + input_dict["data_file"])[0] + '_detrend.mag', survey, survey.dobs)
         
 else:
-    subtract_mean = False
-
-#data_trend = 0.0
-#if "subtract_mean" in list(input_dict.keys()) and input_dict["data_type"] in ['ubc_mag', 'ubc_grav']:
-#    subtract_mean = input_dict["subtract_mean"]
-#    if subtract_mean:
-#        data_trend = np.mean(survey.dobs)
-#        survey.dobs -= data_trend
-#        print('Removed data mean: {0:.6g}'.format(data_trend))
-#else:
-#    subtract_mean = False
+    detrend = False
 
 # Update the specified data uncertainty
 if "new_uncert" in list(input_dict.keys()) and input_dict["data_type"] in ['ubc_mag', 'ubc_grav']:
