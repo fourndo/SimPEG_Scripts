@@ -450,16 +450,18 @@ if "parallelized" in list(input_dict.keys()):
 else:
     parallelized = True
 
-if parallelized == True:
+if parallelized:
     dask.config.set({'array.chunk-size': str(max_chunk_size) + 'MiB'})
     dask.config.set(scheduler='threads')
     dask.config.set(num_workers=n_cpu)
+
+if geosoft_input:
+    Utils.io_utils.writeUBCmagneticsObservations(outDir + os.path.splitext(os.path.basename(input_dict["data_file"]))[0] + '.mag', survey, survey.dobs)
 
 ###############################################################################
 # Processing
 
 rxLoc = survey.rxLoc
-
 # Create near obs topo
 topo_elevations_at_data_locs = np.c_[rxLoc[:, :2], topo_interp_function(rxLoc[:, :2])]
 

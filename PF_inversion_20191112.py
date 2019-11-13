@@ -342,7 +342,7 @@ if "parallelized" in list(input_dict.keys()):
 else:
     parallelized = True
 
-if parallelized == True:
+if parallelized:
     dask.config.set({'array.chunk-size': str(max_chunk_size) + 'MiB'})
     dask.config.set(scheduler='threads')
     dask.config.set(num_workers=n_cpu)
@@ -432,7 +432,7 @@ if tiled_inversion:
         else:
             # Use clustering
             tiles, binCount, tileIDs, tile_numbers = Utils.modelutils.tileSurveyPoints(rxLoc, count)
-
+            
         # Grab the smallest bin and generate a temporary mesh
         indMax = np.argmax(binCount)
 
