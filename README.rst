@@ -10,9 +10,9 @@ To run an inversion, open a command terminal and type:
 Mandatory
 ---------
 
-* **data_type**: Data file format, either "ubc_grav", "ubc_mag"
-* **data_type**
-
+* "data_type": Data file format, either "ubc_grav", "ubc_mag"
+* "inversion_type": Inversion type, one of 'grav', 'mag', 'mvi', or 'mvis'
+* "core_cell_size": [dx,dy,dz] Dimensions of the smallest cell size in the mesh.
 
 Optional
 --------
@@ -20,8 +20,33 @@ Optional
 [DEFAULT]
 
 * "result_folder": Directory used to output the results ["SimPEG_PFInversion"]
-* "subtract_mean": Mean data value to be subtracted from the input values.
+* "detrend": ["points", order] Remove trend from the data. 
+			  "points" is either "all" (all points), or "corners"
+			  order is integer 0, 1, or 2 for trend order
 * "new_uncert": [Percent, floor] Values to be used for uncertainties.
+* "show_graphics": [boolean], Show graphic plots [false]
+* "no_data_value": [value], Value to use for no-data-value [-100]
+* "parallelized": [boolean], Use dask parallelization [true]
+* "max_chunk_size": [value], Size of data chunks to store in memory [128]
+* "depth_core": ["auto", value] Compute mesh depth as value * survey width.
+                [value] Set mesh core depth to value. [0]
+* "model_reference": ["filename"], Load reference model from file.
+                     [value], Reference property, scalar [0]
+                     [value, value, value], Reference property, vector [0, 0, 0]
+    				 If scalar input used for vector model, assume scalar amplitude in inducing field direction.
+* "model_start": ["filename"], Load starting model from file.
+                 [value], Start property, scalar [1e-4]. 
+                 [value, value, value], Start property, vector [1e-4, 1e-4, 1e-4]
+				 If scalar input used for vector model, assume scalar amplitude in inducing field direction.
+* "alphas": [value, value, value, value], Alpha weights, can specify 4 or 12 values as required. [1,1,1,1,1,1,1,1,1,1,1,1]
+* "target_chi": [value], target chi factor [1]
+* "drape_data": [vlaue], smoothly drape the data over topography at altitude value
+
+
+Magnetic only
+--------
+
+* "inducing_field_aid": [TOTAL FIELD, DIP, AZIMUTH], New inducing field as floats
 
 
 More documentation to come in 2019!!
