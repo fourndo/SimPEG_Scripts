@@ -23,7 +23,8 @@ from SimPEG.Utils import mkvc
 import SimPEG.PF as PF
 from discretize.utils import meshutils
 from scipy.interpolate import NearestNDInterpolator, LinearNDInterpolator
-from scipy.spatial import cKDTree
+from scipy.spatial import cKDTree, ConvexHull
+from scipy.linalg import lstsq
 import time
 import geosoft.gxpy.grid as gxgrid
 import geosoft.gxpy.gx as gx
@@ -205,15 +206,57 @@ elif geosoft_enabled and input_dict["data_type"] in ['geosoft_mag', 'geosoft_gra
 else:
 
     assert False, "PF EQS only implemented for 'data_type' 'ubc_grav' | 'ubc_mag' | 'geosoft_grav' | 'geosoft_mag' "
+# Get data locations
+rxLoc = survey.srcField.rxList[0].locs
 
-# 0-level the data if required, d0 = 0 level
-d0 = 0.0
-if "subtract_mean" in list(input_dict.keys()) and input_dict["data_type"] in ['ubc_mag', 'ubc_grav', 'geosoft_grav', 'geosoft_mag']:
-    subtract_mean = input_dict["subtract_mean"]
-    if subtract_mean:
-        d0 = np.mean(survey.dobs)
-        survey.dobs -= d0
-        print('Removed data mean: {0:.6g}'.format(d0))
+# 0-level the data if required, data_trend = 0 level
+data_trend = 0.0
+if "detrend" in list(input_dict.keys()) and input_dict["data_type"] in ['ubc_mag', 'ubc_grav', 'geosoft_grav', 'geosoft_mag']:
+    trend_method = input_dict["detrend"][0]
+    trend_order = input_dict["detrend"][1]
+    
+    assert trend_method in ['all','corners'], "trend_method must be 'all', or 'corners'"
+    assert trend_order in [0, 1, 2], "trend_order must be 0, 1, or 2"
+    
+    if trend_method == "corners":
+        hull = ConvexHull(survey.srcField.rxList[0].locs[:,:2])
+        # Extract only those points that make the ConvexHull
+        pts = np.c_[survey.srcField.rxList[0].locs[hull.vertices,:2], survey.dobs[hull.vertices]]
+    else:
+        # Extract all points
+        pts = np.c_[survey.srcField.rxList[0].locs[:,:2], survey.dobs]
+
+    print(trend_order)
+    if trend_order == 0:
+        data_trend = np.mean(pts[:,2]) * np.ones(rxLoc[:,0].shape)
+        print('Removed data mean: {0:.6g}'.format(data_trend[0]))
+        
+    elif trend_order == 1:
+        # best-fit linear plane
+        A = np.c_[pts[:,0], pts[:,1], np.ones(pts.shape[0])]
+        C,_,_,_ = lstsq(A, pts[:,2])    # coefficients
+        
+        # evaluate at all data locations
+        data_trend = C[0]*rxLoc[:,0] + C[1]*rxLoc[:,0] + C[2]
+    
+    elif trend_order == 2:
+        # best-fit quadratic curve
+        A = np.c_[np.ones(pts.shape[0]), pts[:,:2], np.prod(pts[:,:2], axis=1), pts[:,:2]**2]
+        C,_,_,_ = lstsq(A, pts[:,2])
+        
+        # evaluate at all data locations
+        data_trend = np.dot(np.c_[
+                np.ones(rxLoc[:,0].shape), rxLoc[:,0], rxLoc[:,1], rxLoc[:,0]*rxLoc[:,1], rxLoc[:,0]**2, rxLoc[:,1]**2
+                ], C).reshape(rxLoc[:,0].shape)
+        
+    survey.dobs -= data_trend
+    if input_dict["data_type"] in ['ubc_mag', 'geosoft_mag']:
+        Utils.io_utils.writeUBCmagneticsObservations(os.path.splitext(workDir + input_dict["data_file"])[0] + '_trend.mag', survey, data_trend)
+        Utils.io_utils.writeUBCmagneticsObservations(os.path.splitext(workDir + input_dict["data_file"])[0] + '_detrend.mag', survey, survey.dobs)
+    else:
+        Utils.io_utils.writeUBCgravityObservations(os.path.splitext(workDir + input_dict["data_file"])[0] + '_trend.mag', survey, data_trend)
+        Utils.io_utils.writeUBCgravityObservations(os.path.splitext(workDir + input_dict["data_file"])[0] + '_detrend.mag', survey, survey.dobs)
+        
 else:
     subtract_mean = False
 
@@ -246,7 +289,6 @@ if "mesh_file" in list(input_dict.keys()):
     else:
         meshInput = Mesh.TensorMesh.readUBC(workDir + input_dict["mesh_file"])
 
-
 else:
     meshInput = None
 
@@ -272,7 +314,6 @@ if "drape_data" in list(input_dict.keys()):
     max_pad_distance = [4 * drape_data] 
     
     # Create new data locations draped at drapeAltitude above topo
-    rxLoc = survey.srcField.rxList[0].locs
     ix = (topo[:, 0] >= (rxLoc[:, 0].min() - max_pad_distance)) & (topo[:, 0] <= (rxLoc[:, 0].max() + max_pad_distance)) & \
          (topo[:, 1] >= (rxLoc[:, 1].min() - max_pad_distance)) & (topo[:, 1] <= (rxLoc[:, 1].max() + max_pad_distance))
 
@@ -413,7 +454,6 @@ if "depth_core" in list(input_dict.keys()):
         depth_core = 0
 else:
     depth_core = 0
-
 
 if "max_distance" in list(input_dict.keys()):
     max_distance = input_dict["max_distance"]
@@ -965,11 +1005,11 @@ else:
 
 if input_dict["inversion_type"] == 'grav':
 
-    Utils.io_utils.writeUBCgravityObservations(outDir + 'Predicted_' + input_dict["inversion_type"] + '.dat', survey, dpred+d0)
+    Utils.io_utils.writeUBCgravityObservations(outDir + 'Predicted_' + input_dict["inversion_type"] + '.dat', survey, dpred+data_trend)
 
 elif input_dict["inversion_type"] in ['mvi', 'mvis', 'mag']:
 
-    Utils.io_utils.writeUBCmagneticsObservations(outDir + 'Predicted_' + input_dict["inversion_type"][:3] + '.dat', survey, dpred+d0)
+    Utils.io_utils.writeUBCmagneticsObservations(outDir + 'Predicted_' + input_dict["inversion_type"][:3] + '.dat', survey, dpred+data_trend)
 
 # Repeat inversion in spherical
 if input_dict["inversion_type"] == 'mvis':
@@ -1002,7 +1042,7 @@ if input_dict["inversion_type"] == 'mvis':
         dpred = global_misfit.survey.dpred(mrec)
 
     Utils.io_utils.writeUBCmagneticsObservations(
-      outDir + 'MVI_C_pred.pre', survey, dpred+d0
+      outDir + 'MVI_C_pred.pre', survey, dpred+data_trend
     )
 
     beta = invProb.beta
@@ -1152,7 +1192,7 @@ if input_dict["inversion_type"] == 'mvis':
     else:
         dpred = global_misfit.survey.dpred(mrec_S)
     
-    Utils.io_utils.writeUBCmagneticsObservations(outDir + 'Predicted_mvis.pre', survey, dpred+d0)
+    Utils.io_utils.writeUBCmagneticsObservations(outDir + 'Predicted_mvis.pre', survey, dpred+data_trend)
     
 
 
