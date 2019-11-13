@@ -32,7 +32,77 @@ from discretize.utils import meshutils
 from scipy.interpolate import NearestNDInterpolator, LinearNDInterpolator
 from scipy.spatial import cKDTree, ConvexHull
 from scipy.linalg import lstsq
+import time
+import geosoft.gxpy.grid as gxgrid
+import geosoft.gxpy.gx as gx
 
+# NEED TO ADD ALPHA VALUES
+# NEED TO ADD REFERENCE
+# NEED TO ADD STARTING
+
+###############################################################################
+# EQS Setup
+def readGeosoftGrid(gridname, topo, survey_altitude, data_type, inducing_field_aid=None):
+    try:
+        # open the grid
+        with gxgrid.Grid.open(gridname) as grid:
+    
+            # get the data in a numpy array
+            GsftGrid_values = grid.xyzv()
+            # GsftGrid_mask = np.ma.masked_invalid(GsftGrid_values[:,:,3])
+            GsftGrid_mask = ~np.isnan(GsftGrid_values)
+            # print(GsftGrid_mask)
+            GsftGrid_nx = grid.nx
+            GsftGrid_ny = grid.ny
+            GsftGrid_props = grid.properties()
+    
+    except:
+        print('Failed to read Geosoft grid')
+        sys.exit(1)
+
+    newLocs = np.reshape(GsftGrid_values,(GsftGrid_nx * GsftGrid_ny, 4))
+    newLocs_mask = ~np.isnan(np.reshape(GsftGrid_values[:, :, 3],(GsftGrid_nx * GsftGrid_ny, 1)))
+    newLocs = newLocs[newLocs_mask.squeeze(),:]
+    max_distance = max([5 * GsftGrid_props.get('dx', None), 500]) # Only used to minimize the extent of topo resampling for large problems
+
+    # Create forward obs elevations
+    # Create new data locations draped at survey_altitude above topo
+    ix = (topo[:, 0] >= (newLocs[:, 0].min() - max_distance)) & (topo[:, 0] <= (newLocs[:, 0].max() + max_distance)) & \
+         (topo[:, 1] >= (newLocs[:, 1].min() - max_distance)) & (topo[:, 1] <= (newLocs[:, 1].max() + max_distance))
+    F = LinearNDInterpolator(topo[ix, :2], topo[ix, 2] + survey_altitude)
+
+    newLocs[:,2] = F(newLocs[:,:2])
+    if data_type == 'geosoft_mag':
+        # Mag only
+        rxLocNew = PF.BaseMag.RxObs(newLocs[:,:3])
+        # retain TF, but update inc-dec to vertical field
+        srcField = PF.BaseMag.SrcField([rxLocNew], param=inducing_field_aid)
+        survey = PF.BaseMag.LinearSurvey(srcField, components=['tmi'])
+        survey.dobs = newLocs[:,3]
+    else:
+        # Grav only
+        rxLoc = PF.BaseGrav.RxObs(newLocs[:,:3])
+        srcField = PF.BaseGrav.SrcField([rxLoc])
+        survey = PF.BaseGrav.LinearSurvey(srcField)
+        survey.dobs = -newLocs[:,3]
+        
+    _, ax1 = plt.figure(), plt.subplot()
+    plt.scatter(newLocs[:,0], newLocs[:,1], s=0.01, marker='.',c=newLocs[:,2])
+    ax1.set_aspect('equal')
+    plt.show(block=False)
+
+    print('Will forward model to Geosoft Grid...')
+
+    return survey, GsftGrid_values, GsftGrid_mask, GsftGrid_props
+
+geosoft_enabled = False
+geosoft_output = False
+geosoft_input = False
+try:
+    gxc = gx.GXpy()
+    geosoft_enabled = True
+except:
+    print("Geosoft was not found.")
 
 dsep = os.path.sep
 input_file = sys.argv[1]
@@ -73,6 +143,35 @@ else:
 
 os.system('mkdir ' + '"' + outDir + '"')
 # extra quotes included in case path contains spaces
+
+###############################################################################
+# Deal with the EQS Settings
+if "eqs_mvi" in list(input_dict.keys()):
+    eqs_mvi = input_dict["eqs_mvi"]
+else:
+    eqs_mvi = False
+    
+if "topography" in list(input_dict.keys()):
+    topo = np.genfromtxt(workDir + input_dict["topography"],
+                         skip_header=1)
+#        topo[:,2] += 1e-8
+    # Compute distance of obs above topo
+    topo_interp_function = NearestNDInterpolator(topo[:, :2], topo[:, 2])
+elif eqs_mvi:
+    print('EQS needs topography')
+    sys.exit(1)
+else:
+    topo = None
+    
+if "survey_altitude" in list(input_dict.keys()):
+    survey_altitude = input_dict["survey_altitude"]
+else:
+    survey_altitude = 0.0
+
+if "upward_continue" in list(input_dict.keys()):
+    upward_continue = input_dict["upward_continue"]
+else:
+    upward_continue = 0.0
 
 ###############################################################################
 # Deal with the data
@@ -119,13 +218,21 @@ elif input_dict["data_type"] in ['ftmg']:
     survey = patch.createFtmgSurvey(inducing_field=H0, force_comp=component)
 
     print(survey.components, component, survey.nD)
+
+elif geosoft_enabled and input_dict["data_type"] in ['geosoft_mag', 'geosoft_grav']:
+
+    assert inducing_field_aid is not None, "Geosoft input needs requires 'inducing_field_aid' entry"
+    assert "new_uncert" in list(input_dict.keys()), "Geosoft input needs requires 'new_uncert' entry"
+    
+    geosoft_input = True
+    geosoft_output = True
+    survey, GsftGrid_values, GsftGrid_mask, GsftGrid_props = readGeosoftGrid(input_dict["data_file"], topo, survey_altitude, input_dict["data_type"], inducing_field_aid)
 else:
 
     assert False, (
-        "PF Inversion only implemented for 'data_type' of type:"
-        " 'ubc_grav', 'ubc_mag', 'ftmg' "
+	"PF EQS only implemented for 'data_type' of type:"
+	"'ubc_grav', 'ubc_mag', 'ftmg', 'geosoft_grav', 'geosoft_mag' "
     )
-
 # Get data locations
 rxLoc = survey.srcField.rxList[0].locs
 
@@ -133,7 +240,7 @@ rxLoc = survey.srcField.rxList[0].locs
 data_trend = 0.0
 if (
     "detrend" in list(input_dict.keys()) and
-    input_dict["data_type"] in ['ubc_mag', 'ubc_grav']
+    input_dict["data_type"] in ['ubc_mag', 'ubc_grav', 'geosoft_grav', 'geosoft_mag']
 ):
     trend_method = input_dict["detrend"][0]
     trend_order = input_dict["detrend"][1]
@@ -162,7 +269,7 @@ if (
         C, _, _, _ = lstsq(A, pts[:, 2])    # coefficients
 
         # evaluate at all data locations
-        data_trend = C[0]*rxLoc[:, 0] + C[1]*rxLoc[:, 0] + C[2]
+        data_trend = C[0]*rxLoc[:, 0] + C[1]*rxLoc[:, 1] + C[2]
 
     elif trend_order == 2:
         # best-fit quadratic curve
@@ -182,13 +289,14 @@ if (
                 rxLoc[:, 0]**2, rxLoc[:, 1]**2
                 ], C).reshape(rxLoc[:, 0].shape)
 
+        
     survey.dobs -= data_trend
 
     if survey.std is None and "new_uncert" in list(input_dict.keys()):
         # In case uncertainty hasn't yet been set (e.g., geosoft grids)
         survey.std = np.ones(survey.dobs.shape)
 
-    if input_dict["data_type"] in ['ubc_mag']:
+    if input_dict["data_type"] in ['ubc_mag', 'geosoft_mag']:
         Utils.io_utils.writeUBCmagneticsObservations(os.path.splitext(
             workDir + input_dict["data_file"])[0] + '_trend.mag',
             survey, data_trend
@@ -213,7 +321,7 @@ else:
 # Update the specified data uncertainty
 if (
     "new_uncert" in list(input_dict.keys()) and
-    input_dict["data_type"] in ['ubc_mag', 'ubc_grav']
+    input_dict["data_type"] in ['ubc_mag', 'ubc_grav', 'geosoft_grav', 'geosoft_mag']
 ):
     new_uncert = input_dict["new_uncert"]
     if new_uncert:
@@ -247,20 +355,21 @@ if "mesh_file" in list(input_dict.keys()):
 else:
     meshInput = None
 
-if "topography" in list(input_dict.keys()):
-    topo = np.genfromtxt(workDir + input_dict["topography"],
-                         skip_header=1)
-#        topo[:, 2] += 1e-8
-    # Compute distance of obs above topo
-    topo_interp_function = NearestNDInterpolator(topo[:, :2], topo[:, 2])
-
-else:
-    # Grab the top coordinate and make a flat topo
-    indTop = meshInput.gridCC[:, 2] == meshInput.vectorCCz[-1]
-    topo = meshInput.gridCC[indTop, :]
-    topo[:, 2] += meshInput.hz.min()/2. + 1e-8
-    topo_interp_function = NearestNDInterpolator(topo[:, :2], topo[:, 2])
-
+if topo is None:
+    if "topography" in list(input_dict.keys()):
+        topo = np.genfromtxt(workDir + input_dict["topography"],
+                             skip_header=1)
+    #        topo[:,2] += 1e-8
+        # Compute distance of obs above topo
+        topo_interp_function = NearestNDInterpolator(topo[:, :2], topo[:, 2])
+    
+    else:
+        # Grab the top coordinate and make a flat topo
+        indTop = meshInput.gridCC[:, 2] == meshInput.vectorCCz[-1]
+        topo = meshInput.gridCC[indTop, :]
+        topo[:, 2] += meshInput.hz.min()/2. + 1e-8
+        topo_interp_function = NearestNDInterpolator(topo[:, :2], topo[:, 2])
+    
 if "drape_data" in list(input_dict.keys()):
     drape_data = input_dict["drape_data"]
 
@@ -475,6 +584,13 @@ if parallelized:
     dask.config.set({'array.chunk-size': str(max_chunk_size) + 'MiB'})
     dask.config.set(scheduler='threads')
     dask.config.set(num_workers=n_cpu)
+
+if geosoft_input:
+    Utils.io_utils.writeUBCmagneticsObservations(
+	outDir + os.path.splitext(
+	os.path.basename(input_dict["data_file"]))[0] + '.mag'
+	, survey, survey.dobs
+    )
 
 ###############################################################################
 # Processing
@@ -1283,3 +1399,132 @@ if "forward" in list(input_dict.keys()):
     elif input_dict["inversion_type"] == 'mag':
 
         Utils.io_utils.writeUBCmagneticsObservations(outDir + 'Forward.dat', forward, pred)
+
+
+if "eqs_mvi" in list(input_dict.keys()) and input_dict["inversion_type"] in ['mvi', 'mvis']:
+    # MAG ONLY RTP Amplitude
+    print("Run RTP forward model")
+    # Add a constant height to the existing locations for upward continuation
+    newLocs = survey.srcField.rxList[0].locs
+    newLocs[:, 2] += upward_continue
+
+    # Mag only
+    rxLocNew = PF.BaseMag.RxObs(newLocs)
+    # retain TF, but update inc-dec to vertical field
+    srcField = PF.BaseMag.SrcField([rxLocNew], param=[survey.srcField.param[0],90,0])
+    forward = PF.BaseMag.LinearSurvey(srcField, components=['tmi'])
+
+    # Set unity standard deviations (required but not used)
+    forward.std = np.ones(newLocs.shape[0])
+
+    if input_dict["inversion_type"] in ['mvi']:
+        # Model lp out MVI_C
+        vec_xyz = mrec.reshape((nC, 3), order='F')
+    else:
+       # Model lp out MVI_S
+        vec_xyz = Utils.matutils.atp2xyz(
+            mrec_S.reshape((nC, 3), order='F')).reshape((nC, 3), order='F')
+
+    # RTP forward
+    amp = (vec_xyz[:, 0]**2. + vec_xyz[:, 1]**2 + vec_xyz[:, 2]**2)**0.5
+    activeGlobal = (activeCellsMap * amp) != no_data_value
+    idenMap = Maps.IdentityMap(nP=int(activeGlobal.sum()))
+    start_time = time.time()
+    fwrProb = PF.Magnetics.MagneticIntegral(
+        mesh, chiMap=idenMap, actInd=activeGlobal, parallelized=parallelized,
+        forwardOnly=True
+        )
+
+    forward.pair(fwrProb)
+    pred = fwrProb.fields(amp)
+    elapsed_time = time.time() - start_time
+    print('Time: {0:.3f} sec'.format(elapsed_time))
+    
+    Utils.io_utils.writeUBCmagneticsObservations(outDir + 'EQS_AMP_RTP.mag', forward, pred)
+    if geosoft_output:
+        t = GsftGrid_values[:,:,3]
+        t[GsftGrid_mask[:,:,3]] = pred
+        
+        # Create output filenames        
+        filenameParts = gxgrid.name_parts(input_dict["data_file"])
+        outputGridName = os.path.join(outDir, 'EQS_AMP_RTP.grd(GRD;COMP=SPEED)')      
+        newGrid = gxgrid.Grid.from_data_array(t, file_name=outputGridName, overwrite=True, properties=GsftGrid_props)
+        newGrid.close()
+        
+    forward.unpair()
+    forward = PF.BaseMag.LinearSurvey(srcField, components=['bx','by','bz'])
+        # Set unity standard deviations (required but not used)
+    forward.std = np.ones(newLocs.shape[0])
+
+    # MAG ONLY RTP Amplitude
+    print("Run Vector forward model")
+    
+    idenMap = Maps.IdentityMap(nP=3*int(activeGlobal.sum()))
+    start_time = time.time()
+
+    if input_dict["inversion_type"] in ['mvi']:
+        fwrProb = PF.Magnetics.MagneticIntegral(
+            mesh, chiMap=idenMap, actInd=activeGlobal, parallelized=parallelized,
+            forwardOnly=True, modelType='vector'
+            )
+    
+        forward.pair(fwrProb)
+        pred = fwrProb.fields(mrec)
+    else:
+        fwrProb = PF.Magnetics.MagneticIntegral(
+            mesh, chiMap=idenMap, actInd=activeGlobal, parallelized=parallelized,
+            forwardOnly=True, coordinate_system = 'spherical', modelType='vector'
+            )
+    
+        forward.pair(fwrProb)
+        pred = fwrProb.fields(mrec_S)
+        
+    elapsed_time = time.time() - start_time
+    print('Time: {0:.3f} sec'.format(elapsed_time))
+
+    d_amp = np.sqrt(pred[::3]**2. +
+                    pred[1::3]**2. +
+                    pred[2::3]**2.)
+
+    Utils.io_utils.writeUBCmagneticsObservations(outDir + 'EQS_MVI_Bx.mag', forward, pred[::3])
+    Utils.io_utils.writeUBCmagneticsObservations(outDir + 'EQS_MVI_By.mag', forward, pred[1::3])
+    Utils.io_utils.writeUBCmagneticsObservations(outDir + 'EQS_MVI_Bz.mag', forward, pred[2::3])
+    Utils.io_utils.writeUBCmagneticsObservations(outDir + 'EQS_MVI_RTP.mag', forward, -pred[2::3])
+    Utils.io_utils.writeUBCmagneticsObservations(outDir + 'EQS_MVI_Amp.mag', forward, d_amp)
+
+    if geosoft_output:
+        t = GsftGrid_values[:,:,3]
+        t[GsftGrid_mask[:,:,3]] = pred[::3]
+        
+        # Create output filenames        
+        outputGridName = os.path.join(outDir, 'EQS_MVI_Bx.grd(GRD;COMP=SPEED)')      
+        newGrid = gxgrid.Grid.from_data_array(t, file_name=outputGridName, overwrite=True, properties=GsftGrid_props)
+        newGrid.close()
+
+        t[GsftGrid_mask[:,:,3]] = pred[1::3]
+        
+        # Create output filenames        
+        outputGridName = os.path.join(outDir, 'EQS_MVI_By.grd(GRD;COMP=SPEED)')      
+        newGrid = gxgrid.Grid.from_data_array(t, file_name=outputGridName, overwrite=True, properties=GsftGrid_props)
+        newGrid.close()
+
+        t[GsftGrid_mask[:,:,3]] = pred[2::3]
+        
+        # Create output filenames        
+        outputGridName = os.path.join(outDir, 'EQS_MVI_Bz.grd(GRD;COMP=SPEED)')      
+        newGrid = gxgrid.Grid.from_data_array(t, file_name=outputGridName, overwrite=True, properties=GsftGrid_props)
+        newGrid.close()
+
+        t[GsftGrid_mask[:,:,3]] = -pred[2::3]
+        
+        # Create output filenames        
+        outputGridName = os.path.join(outDir, 'EQS_MVI_RTP.grd(GRD;COMP=SPEED)')      
+        newGrid = gxgrid.Grid.from_data_array(t, file_name=outputGridName, overwrite=True, properties=GsftGrid_props)
+        newGrid.close()
+
+        t[GsftGrid_mask[:,:,3]] = d_amp
+        
+        # Create output filenames        
+        outputGridName = os.path.join(outDir, 'EQS_MVI_AMP.grd(GRD;COMP=SPEED)')      
+        newGrid = gxgrid.Grid.from_data_array(t, file_name=outputGridName, overwrite=True, properties=GsftGrid_props)
+        newGrid.close()
