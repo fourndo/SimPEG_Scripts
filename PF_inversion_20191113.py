@@ -183,7 +183,12 @@ if (
                 ], C).reshape(rxLoc[:, 0].shape)
 
     survey.dobs -= data_trend
-    if input_dict["data_type"] in ['ubc_mag']:
+
+    if survey.std is None and "new_uncert" in list(input_dict.keys()):
+        # In case uncertainty hasn't yet been set (e.g., geosoft grids)
+        survey.std = np.ones(survey.dobs.shape)
+
+    if input_dict["data_type"] in ['ubc_mag', 'geosoft_mag']:
         Utils.io_utils.writeUBCmagneticsObservations(os.path.splitext(
             workDir + input_dict["data_file"])[0] + '_trend.mag',
             survey, data_trend
