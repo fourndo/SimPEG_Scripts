@@ -352,7 +352,7 @@ if parallelized == True:
 
 rxLoc = survey.rxLoc
 # Create near obs topo
-newTopo = np.c_[rxLoc[:, :2], topo_interp_function(rxLoc[:, :2])]
+topo_elevations_at_data_locs = np.c_[rxLoc[:, :2], topo_interp_function(rxLoc[:, :2])]
 
 def createLocalMesh(rxLoc, ind_t):
     """
@@ -384,7 +384,7 @@ def createLocalMesh(rxLoc, ind_t):
         # Utils.io_utils.writeUBCmagneticsObservations(outDir + "Tile" + str(ind) + '.dat', local_survey, local_survey.dobs)
 
     meshLocal = meshutils.mesh_builder_xyz(
-        newTopo, core_cell_size, padding_distance=padding_distance, mesh_type='TREE', base_mesh=meshInput,
+        topo_elevations_at_data_locs, core_cell_size, padding_distance=padding_distance, mesh_type='TREE', base_mesh=meshInput,
         depth_core=depth_core
     )
 
@@ -395,7 +395,7 @@ def createLocalMesh(rxLoc, ind_t):
         )
 
     meshLocal = meshutils.refine_tree_xyz(
-        meshLocal, rxLoc[ind_t, :], method='surface',
+        meshLocal, topo_elevations_at_data_locs[ind_t, :], method='surface',
         max_distance=max_distance,
         octree_levels=octree_levels_obs,
         octree_levels_padding=octree_levels_padding,
@@ -443,7 +443,7 @@ if tiled_inversion:
 
         # Create the mesh and refine the same as the global mesh
         meshLocal = meshutils.mesh_builder_xyz(
-            newTopo, core_cell_size, padding_distance=padding_distance, mesh_type='TREE', base_mesh=meshInput,
+            topo_elevations_at_data_locs, core_cell_size, padding_distance=padding_distance, mesh_type='TREE', base_mesh=meshInput,
             depth_core=depth_core
         )
 
@@ -454,7 +454,7 @@ if tiled_inversion:
             )
 
         meshLocal = meshutils.refine_tree_xyz(
-            meshLocal, rxLoc[ind_t, :], method='surface',
+            meshLocal, topo_elevations_at_data_locs[ind_t, :], method='surface',
             max_distance=max_distance,
             octree_levels=octree_levels_obs,
             octree_levels_padding=octree_levels_padding,
@@ -491,7 +491,7 @@ if meshInput is None:
     if tiled_inversion:
         print("Creating Global Octree")
         mesh = meshutils.mesh_builder_xyz(
-            newTopo, core_cell_size,
+            topo_elevations_at_data_locs, core_cell_size,
             padding_distance=padding_distance,
             mesh_type='TREE', base_mesh=meshInput,
             depth_core=depth_core
