@@ -13,6 +13,7 @@ import SimPEG.PF as PF
 import numpy as np
 import matplotlib.pyplot as plt
 import csv as reader
+from scipy.spatial import cKDTree
 
 # # USER INPUTS # #
 # workDir = "C:\\Users\\DominiqueFournier\\Dropbox\\Projects\\Kevitsa\\Kevitsa\\Modeling\\MAG\\Airborne"
@@ -63,6 +64,8 @@ def progress(iter, prog, final):
 
 if method[0] == 'radius':
 
+    tree = cKDTree(locXYZ[:, :2])
+
     nstn = locXYZ.shape[0]
     # Initialize the filter
     indx = np.ones(nstn, dtype='bool')
@@ -74,10 +77,9 @@ if method[0] == 'radius':
 
         if indx[ii]:
 
-            rad = ((locXYZ[ii, 0] - locXYZ[:, 0])**2 +
-                   (locXYZ[ii, 1] - locXYZ[:, 1])**2)**0.5
+            ind = tree.query_ball_point(locXYZ[ii, :2], method[1])
 
-            indx[rad < method[1]] = False
+            indx[ind] = False
             indx[ii] = True
 
         count = progress(ii, count, nstn)
