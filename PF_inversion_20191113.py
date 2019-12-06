@@ -162,7 +162,7 @@ if (
         C, _, _, _ = lstsq(A, pts[:, 2])    # coefficients
 
         # evaluate at all data locations
-        data_trend = C[0]*rxLoc[:, 0] + C[1]*rxLoc[:, 0] + C[2]
+        data_trend = C[0]*rxLoc[:, 0] + C[1]*rxLoc[:, 1] + C[2]
 
     elif trend_order == 2:
         # best-fit quadratic curve
@@ -190,20 +190,20 @@ if (
 
     if input_dict["data_type"] in ['ubc_mag']:
         Utils.io_utils.writeUBCmagneticsObservations(os.path.splitext(
-            workDir + input_dict["data_file"])[0] + '_trend.mag',
+            outDir + input_dict["data_file"])[0] + '_trend.mag',
             survey, data_trend
         )
         Utils.io_utils.writeUBCmagneticsObservations(os.path.splitext(
-            workDir + input_dict["data_file"])[0] + '_detrend.mag',
+            outDir + input_dict["data_file"])[0] + '_detrend.mag',
             survey, survey.dobs
         )
     else:
         Utils.io_utils.writeUBCgravityObservations(os.path.splitext(
-            workDir + input_dict["data_file"])[0] + '_trend.mag',
+            outDir + input_dict["data_file"])[0] + '_trend.mag',
             survey, data_trend
         )
         Utils.io_utils.writeUBCgravityObservations(os.path.splitext(
-            workDir + input_dict["data_file"])[0] + '_detrend.mag',
+            outDir + input_dict["data_file"])[0] + '_detrend.mag',
             survey, survey.dobs
         )
 
@@ -412,16 +412,14 @@ else:
 if "depth_core" in list(input_dict.keys()):
     # Set depth of core to user-specified fraction of minimum survey width
     if (
-        isinstance(input_dict["depth_core"], float) or
-        isinstance(input_dict["depth_core"], int)
+        isinstance(input_dict["depth_core"], (float, int))
     ):
         depth_core = input_dict["depth_core"]
     elif (
         len(input_dict["depth_core"]) == 2 and
         isinstance(input_dict["depth_core"][0], str) and
         input_dict["depth_core"][0] == 'auto' and
-        (isinstance(input_dict["depth_core"][1], float) or
-            isinstance(input_dict["depth_core"][1], int)) and
+        isinstance(input_dict["depth_core"][1], (float, int)) and
         input_dict["depth_core"][1] >= 0
     ):
         xLoc = survey.rxLoc[:, 0]
