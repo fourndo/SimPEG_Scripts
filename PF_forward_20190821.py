@@ -22,12 +22,12 @@ from scipy.interpolate import LinearNDInterpolator
 from scipy.spatial import cKDTree
 from SimPEG.Utils import mkvc
 from dask.distributed import Client
+import sys
 
-
-input_file = r"C:\Users\DominiqueFournier\Dropbox\Projects\Synthetic\Block_Gaussian_topo\PF_forward_input.json"#sys.argv[1]
+input_file = sys.argv[1]
 dsep = os.path.sep
 
-grav_components = ['g_z']
+grav_components = ['gz']
 mag_components = [
         "dbx_dx", "dbx_dy", "dbx_dz", "dby_dy",
         "dby_dz", "dbz_dz", "bx", "by", "bz", "tmi"
@@ -54,22 +54,22 @@ input_dict = dict((k.lower(), driver[k]) for k in list(driver.keys()))
 components = input_dict["data_type"]
 if not isinstance(components, list):
     components = [components]
-    
+
 n_components = len(components)
 is_mag_simulation = False
 for component in components:
-    
+
     assert component in grav_components + mag_components, (
-        "Input data_type '{}' not implemented. Please choose from {:}".format(component, 
+        "Input data_type '{}' not implemented. Please choose from {:}".format(component,
             grav_components + mag_components
         )
     )
-    
+
     if component in mag_components:
         is_mag_simulation = True
 
     if (component in grav_components) and (is_mag_simulation):
-        
+
         assert False, "Cannot simulate 'mag' or 'grav' components together"
 
 if "mesh_file" in list(driver.keys()):
@@ -79,7 +79,7 @@ if "mesh_file" in list(driver.keys()):
     for ii in range(6):
         line = fid.readline()
     fid.close()
-
+    print(workDir + input_dict["mesh_file"], line.strip())
     if line:
         mesh = Mesh.TreeMesh.readUBC(workDir + input_dict["mesh_file"])
     else:
@@ -91,7 +91,7 @@ if "model_file" in list(driver.keys()):
     line = fid.readline()
     fid.close()
 
-    if np.array(line.split(), dtype=float).shape[0] > 1:
+    if np.array(line.split(), dtype=float).ndim > 1:
         model_type = 'vector'
         model = Utils.io_utils.readVectorUBC(
             mesh, workDir + input_dict["model_file"]
@@ -178,6 +178,7 @@ nC = int(activeCells.sum())  # Number of active cells
 
 # Get the layer of cells directly below topo
 if not is_mag_simulation:
+    print(nC, m0.min())
     idenMap = Maps.IdentityMap(nP=nC)
     prob = PF.Gravity.GravityIntegral(
         mesh, rhoMap=idenMap, actInd=activeCells, forwardOnly=True,
@@ -203,12 +204,12 @@ dpred = prob.fields(m0)
 
 
 for ii, component in enumerate(components):
-    
+
     file_name = 'Predicted_' + component +'.dat'
     if component in grav_components:
-    
+
         Utils.io_utils.writeUBCgravityObservations(workDir + file_name, survey, dpred[ii::n_components])
-    
+
     elif component in mag_components:
-    
+
         Utils.io_utils.writeUBCmagneticsObservations(workDir + file_name, survey, dpred[ii::n_components])
