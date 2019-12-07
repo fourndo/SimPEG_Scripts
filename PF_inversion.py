@@ -26,7 +26,7 @@ from SimPEG import (
     Mesh, Utils, Maps, Regularization,
     DataMisfit, Inversion, InvProblem, Directives, Optimization,
     )
-from SimPEG.Utils import mkvc
+from SimPEG.Utils import mkvc, matutils
 import SimPEG.PF as PF
 from discretize.utils import meshutils
 from scipy.interpolate import NearestNDInterpolator, LinearNDInterpolator
@@ -130,7 +130,6 @@ else:
 rxLoc = survey.srcField.rxList[0].locs
 
 # 0-level the data if required, data_trend = 0 level
-data_trend = 0.0
 if (
     "detrend" in list(input_dict.keys()) and
     input_dict["data_type"] in ['ubc_mag', 'ubc_grav']
@@ -144,49 +143,13 @@ if (
 
     assert trend_order in [0, 1, 2], "trend_order must be 0, 1, or 2"
 
-    if trend_method == "corners":
-        hull = ConvexHull(survey.srcField.rxList[0].locs[:, :2])
-        # Extract only those points that make the ConvexHull
-        pts = np.c_[survey.srcField.rxList[0].locs[hull.vertices, :2], survey.dobs[hull.vertices]]
-    else:
-        # Extract all points
-        pts = np.c_[survey.srcField.rxList[0].locs[:, :2], survey.dobs]
+    data_trend = matutils.calculate_2D_trend(rxLoc, survey.dobs)
 
-    if trend_order == 0:
-        data_trend = np.mean(pts[:, 2]) * np.ones(rxLoc[:, 0].shape)
-        print('Removed data mean: {0:.6g}'.format(data_trend[0]))
+    survey.dobs -= trend
 
-    elif trend_order == 1:
-        # best-fit linear plane
-        A = np.c_[pts[:, 0], pts[:, 1], np.ones(pts.shape[0])]
-        C, _, _, _ = lstsq(A, pts[:, 2])    # coefficients
-
-        # evaluate at all data locations
-        data_trend = C[0]*rxLoc[:, 0] + C[1]*rxLoc[:, 0] + C[2]
-
-    elif trend_order == 2:
-        # best-fit quadratic curve
-        A = np.c_[
-            np.ones(pts.shape[0]), pts[:, :2],
-            np.prod(pts[:, :2], axis=1),
-            pts[:, :2]**2
-        ]
-        C, _, _, _ = lstsq(A, pts[:, 2])
-
-        # evaluate at all data locations
-        data_trend = np.dot(np.c_[
-                np.ones(rxLoc[:, 0].shape),
-                rxLoc[:, 0],
-                rxLoc[:, 1],
-                rxLoc[:, 0]*rxLoc[:, 1],
-                rxLoc[:, 0]**2, rxLoc[:, 1]**2
-                ], C).reshape(rxLoc[:, 0].shape)
-
-    survey.dobs -= data_trend
-
-    if survey.std is None and "new_uncert" in list(input_dict.keys()):
-        # In case uncertainty hasn't yet been set (e.g., geosoft grids)
-        survey.std = np.ones(survey.dobs.shape)
+    # if survey.std is None and "new_uncert" in list(input_dict.keys()):
+    #     # In case uncertainty hasn't yet been set (e.g., geosoft grids)
+    #     survey.std = np.ones(survey.dobs.shape)
 
     if input_dict["data_type"] in ['ubc_mag']:
         Utils.io_utils.writeUBCmagneticsObservations(os.path.splitext(
@@ -206,9 +169,8 @@ if (
             workDir + input_dict["data_file"])[0] + '_detrend.mag',
             survey, survey.dobs
         )
-
 else:
-    detrend = False
+    data_trend = 0.0
 
 # Update the specified data uncertainty
 if (
@@ -221,8 +183,6 @@ if (
             "New uncertainty requires pct fraction (0-1) and floor."
         )
         survey.std = np.maximum(abs(new_uncert[0]*survey.dobs), new_uncert[1])
-else:
-    new_uncert = False
 
 if survey.std is None:
     survey.std = survey.dobs * 0 + 1  # Default
@@ -273,9 +233,6 @@ else:
 if "topography" in list(input_dict.keys()):
     topo = np.genfromtxt(workDir + input_dict["topography"],
                          skip_header=1)
-#        topo[:, 2] += 1e-8
-    # Compute distance of obs above topo
-    topo_interp_function = NearestNDInterpolator(topo[:, :2], topo[:, 2])
 
 else:
 
@@ -287,7 +244,9 @@ else:
     indTop = input_mesh.gridCC[:, 2] == input_mesh.vectorCCz[-1]
     topo = input_mesh.gridCC[indTop, :]
     topo[:, 2] += input_mesh.hz.min()/2. + 1e-8
-    topo_interp_function = NearestNDInterpolator(topo[:, :2], topo[:, 2])
+
+# Create a linear interpolator for the mesh creation
+topo_interp_function = NearestNDInterpolator(topo[:, :2], topo[:, 2])
 
 if "drape_data" in list(input_dict.keys()):
     drape_data = input_dict["drape_data"]
@@ -443,8 +402,7 @@ else:
 
     upper_bound = np.inf
 
-
-
+# @Nick: Not sure we want to keep this, not so transparent
 if len(octree_levels_padding) < len(octree_levels_obs):
     octree_levels_padding += octree_levels_obs[len(octree_levels_padding):]
 
