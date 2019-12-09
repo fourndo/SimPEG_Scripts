@@ -420,27 +420,16 @@ else:
     assert "'core_cell_size' must be added to the inputs"
 
 if "depth_core" in list(input_dict.keys()):
-    # Set depth of core to user-specified fraction of minimum survey width
-    if (
-        isinstance(input_dict["depth_core"], float) or
-        isinstance(input_dict["depth_core"], int)
-    ):
-        depth_core = input_dict["depth_core"]
-    elif (
-        len(input_dict["depth_core"]) == 2 and
-        isinstance(input_dict["depth_core"][0], str) and
-        input_dict["depth_core"][0] == 'auto' and
-        (isinstance(input_dict["depth_core"][1], float) or
-            isinstance(input_dict["depth_core"][1], int)) and
-        input_dict["depth_core"][1] >= 0
-    ):
+    if "value" in list(input_dict["depth_core"].keys()):
+        depth_core = input_dict["depth_core"]["value"]
+
+    elif "auto" in list(input_dict["depth_core"].keys()):
         xLoc = survey.rxLoc[:, 0]
         yLoc = survey.rxLoc[:, 1]
         depth_core = (
             np.min([(xLoc.max()-xLoc.min()), (yLoc.max()-yLoc.min())]) *
-            input_dict["depth_core"][1]
+            input_dict["depth_core"]["auto"]
         )
-        print("Mesh core depth = %.2f" % depth_core)
     else:
         depth_core = 0
 else:

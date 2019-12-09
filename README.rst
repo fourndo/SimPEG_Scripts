@@ -10,46 +10,66 @@ To run an inversion, open a command terminal and type:
 Parameters
 ----------
 
-* "data_type": Data file format, either "ubc_grav", "ubc_mag"
-* "inversion_type": Inversion type, one of 'grav', 'mag', 'mvi', or 'mvis'
-* "core_cell_size": [dx,dy,dz] Dimensions of the smallest cell size in the mesh.
+* ``data_type``: str
+    Data file format,
+     - ``ubc_grav``: See `GRAV3D documentation <https://grav3d.readthedocs.io/en/latest/content/files/obs.html#observations-file>`_
+     - ``ubc_mag``: See `MAG3D documentation <https://mag3d.readthedocs.io/en/latest/content/files/obs.html#observations-file>`_
+* ``inversion_type``: str
+    Inversion typ
+        - 'grav': Invert for density in (g/cc).
+        - 'mag': Invert for magnetic susceptibility in (SI).
+        - 'mvi': Invert for effective susceptibility in Cartesian coordinates.
+        - 'mvis': Invert for effective susceptibility in Spherical coordinates.
+* ``core_cell_size``: list
+    Dimensions of the smallest cell size in the mesh. [dx, dy, dz]
 
-Optional with [DEFAULT]
------------------------
+Optional settings: type = DEFAULT
+---------------------------------
 
-
-* ``inversion_style``: str
-    Inversion style chosen from:
-        - [``voxel``]: Standard voxel base inversion
-        - ``homogeneous_units``: Invert for best-fitting value for every unique domains defined by the reference model
-* ``result_folder``: str
-    Directory used to output the results ["SimPEG_PFInversion"]
+* ``alphas``: list = [1, 1, 1, 1]
+    Alpha weights used to scale the regularization functions.
+    - Scalar (density, susceptibility): Requires 4 values for [a_s, a_x, a_y, a_z]
+    - Vector (mvi): Requires 12 values for [a_s, a_x, a_y, a_z, t_s, t_x, t_y, t_z, p_s, p_x, p_y, p_z]
+* ``depth_core``: dict: {str, float} = {"method": value}
+    Thickness of core region defined by ``method``:
+        - ``value``: Set ``value`` in meters
+        - ``auto``: Compute mesh depth as: ``value`` * survey width.
 * ``detrend``: dict {str: int}
     Remove trend from the data {method: order}.
         ``method``
             ``all``: All points used
             ``corners``: Points on the convex hull
-		``order``
+        ``order``
             Integer defining the order of polynomial: 0, 1 or 2
-* ``new_uncert``: [Percent, floor] Values to be used for uncertainties.
-* ``show_graphics``: bool
-    Show graphic plots [False]
-* ``no_data_value``: [value], Value to use for no-data-value [-100]
-* ``parallelized``: [boolean], Use dask parallelization [true]
+* ``drape_data``: float
+    Value defining the drape height above topography. If ``drape_data`` is used, the Z elevation of receivers are over-written
+* ``inversion_style``: str
+    Inversion style chosen from:
+        - ``voxel``: Standard voxel base inversion [DEFAULT]
+        - ``homogeneous_units``: Invert for best-fitting value for every unique domains defined by the reference model
 * ``max_chunk_size``: [value], Size of data chunks to store in memory [128]
-* ``depth_core``: [``auto``, value] Compute mesh depth as value * survey width.
-                [value] Set mesh core depth to value. [0]
 * ``model_reference``: [``filename``], Load reference model from file.
                      [value], Reference property, scalar [0]
                      [value, value, value], Reference property, vector [0, 0, 0]
-    				 If scalar input used for vector model, assume scalar amplitude in inducing field direction.
+                     If scalar input used for vector model, assume scalar amplitude in inducing field direction.
 * ``model_start``: [``filename``], Load starting model from file.
                  [value], Start property, scalar [1e-4].
                  [value, value, value], Start property, vector [1e-4, 1e-4, 1e-4]
-				 If scalar input used for vector model, assume scalar amplitude in inducing field direction.
-* ``alphas``: [value, value, value, value], Alpha weights, can specify 4 or 12 values as required. [1,1,1,1,1,1,1,1,1,1,1,1]
-* ``target_chi``: [value], target chi factor [1]
-* ``drape_data``: [vlaue], smoothly drape the data over topography at altitude value
+                 If scalar input used for vector model, assume scalar amplitude in inducing field direction.
+* ``new_uncert``: list = [0, 1]
+    List of values to be used for uncertainties set as [%, floor] where
+    uncertainty = % * |data| + floor
+* ``no_data_value``: float = -100
+    Value to use for no-data-value
+* ``parallelized``: bool = True,
+    Use dask parallelization
+* ``result_folder``: str = "SimPEG_PFInversion"
+    Directory used to output the results
+* ``show_graphics``: bool = False
+    Show graphic plots
+* ``target_chi``: float = 1
+    Target chi factor
+
 
 
 Magnetic only
