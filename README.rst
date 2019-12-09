@@ -43,13 +43,16 @@ Optional settings: type = DEFAULT
             Integer defining the order of polynomial: 0, 1 or 2
 * ``drape_data``: float = None
     Value defining the drape height above topography. If ``drape_data`` is used, the Z elevation of receivers are over-written
+* ``input_mesh_file``: str = None
+    Mesh file in UBC format used to load the ``model_reference`` and ``model_start``. Also use for the inversion if ``inversion_mesh_type`` is same type as mesh.
 * ``inversion_mesh_type``: str = "tree"
     Type of mesh to be used in the inversion. If type differs from the ``input_mesh_file``, then the input ``model_reference`` and ``model_start`` are interpolated.
 * ``inversion_style``: str
     Inversion style chosen from:
         - ``voxel``: Standard voxel base inversion [DEFAULT]
         - ``homogeneous_units``: Invert for best-fitting value for each domain defined by the unique values found in ``model_start``.
-* ``max_chunk_size``: [value], Size of data chunks to store in memory [128]
+* ``max_chunk_size``: float = 128
+        Size of data chunks to store in memory
 * ``model_start``: str or float or list[float] = 0
     Starting model to be loaded with the ``input_mesh``
         - str = ``filename``: Load starting model from file. If ``inversion_mesh_type`` differs from the ``input_mesh_file``, the model values are interpolated to the new mesh.
