@@ -26,7 +26,7 @@ from SimPEG import (
     Mesh, Utils, Maps, Regularization,
     DataMisfit, Inversion, InvProblem, Directives, Optimization,
     )
-from SimPEG.Utils import mkvc, matutils
+from SimPEG.Utils import mkvc, matutils, modelutils
 import SimPEG.PF as PF
 from discretize.utils import meshutils
 from scipy.interpolate import NearestNDInterpolator, LinearNDInterpolator
@@ -64,6 +64,12 @@ assert "inversion_type" in list(input_dict.keys()), (
 assert input_dict["inversion_type"] in ['grav', 'mag', 'mvi', 'mvis'], (
     "'inversion_type' must be one of: 'grav', 'mag', 'mvi', or 'mvis'"
 )
+
+if "inversion_style" in list(input_dict.keys()):
+    inversion_style = input_dict["inversion_style"]
+else:
+    inversion_style = "voxel"
+
 
 if "result_folder" in list(input_dict.keys()):
     root = os.path.commonprefix([input_dict["result_folder"], workDir])
@@ -147,10 +153,6 @@ if (
 
     survey.dobs -= trend
 
-    # if survey.std is None and "new_uncert" in list(input_dict.keys()):
-    #     # In case uncertainty hasn't yet been set (e.g., geosoft grids)
-    #     survey.std = np.ones(survey.dobs.shape)
-
     if input_dict["data_type"] in ['ubc_mag']:
         Utils.io_utils.writeUBCmagneticsObservations(os.path.splitext(
             workDir + input_dict["data_file"])[0] + '_trend.mag',
@@ -224,7 +226,6 @@ else:
 
 
 if "shift_mesh_z0" in list(input_dict.keys()):
-
     # Determine if the mesh is tensor or tree
     shift_mesh_z0 = input_dict["shift_mesh_z0"]
 else:
@@ -307,7 +308,7 @@ else:
     else:
         # Spherical or sparse
         max_irls_iterations = 20
-print(max_irls_iterations)
+
 if "max_global_iterations" in list(input_dict.keys()):
     max_global_iterations = input_dict["max_global_iterations"]
     assert max_global_iterations >= 0, "Max IRLS iterations must be >= 0"
@@ -319,6 +320,11 @@ if "gradient_type" in list(input_dict.keys()):
     gradient_type = input_dict["gradient_type"]
 else:
     gradient_type = 'total'
+
+if "initial_beta" in list(input_dict.keys()):
+    initial_beta = input_dict["initial_beta"]
+else:
+    initial_beta = None
 
 if "n_cpu" in list(input_dict.keys()):
     n_cpu = input_dict["n_cpu"]
@@ -367,6 +373,7 @@ else:
 if "model_start" in list(input_dict.keys()):
     if isinstance(input_dict["model_start"], str):
         model_start = input_dict["model_start"]
+
     else:
         model_start = np.r_[input_dict["model_start"]]
         assert model_start.shape[0] == 1 or model_start.shape[0] == 3, (
@@ -379,6 +386,7 @@ if "model_reference" in list(input_dict.keys()):
 
     if isinstance(input_dict["model_reference"], str):
         model_reference = input_dict["model_reference"]
+
     else:
         model_reference = np.r_[input_dict["model_reference"]]
         assert (
@@ -463,10 +471,20 @@ if "output_tile_files" in list(input_dict.keys()):
 else:
     output_tile_files = False
 
+if input_dict["inversion_type"] in ['mvi', 'mvis', 'mvic']:
+    vector_property = True
+    n_blocks = 3
+else:
+    vector_property = False
+    n_blocks = 1
+
 if "no_data_value" in list(input_dict.keys()):
     no_data_value = input_dict["no_data_value"]
 else:
-    no_data_value = -100
+    if vector_property:
+        no_data_value = 0
+    else:
+        no_data_value = -100
 
 if "parallelized" in list(input_dict.keys()):
     parallelized = input_dict["parallelized"]
@@ -674,6 +692,8 @@ if (
 
         mesh, _ = createLocalMesh(rxLoc, np.ones(rxLoc.shape[0], dtype='bool'))
 
+    # Transfer the refenrece and starting model to the new mesh
+
 else:
 
     mesh = input_mesh
@@ -698,7 +718,6 @@ if show_graphics:
     )
     plt.show(block=False)
 
-print("Calculating active cells from topo")
 # Compute active cells
 print("Calculating global active cells from topo")
 activeCells = Utils.surface2ind_topo(mesh, topo, gridLoc='CC')
@@ -722,10 +741,116 @@ if "adjust_clearance" in list(input_dict.keys()):
 nC = int(activeCells.sum())  # Number of active cells
 
 # Create active map to go from reduce set to full
-activeCellsMap = Maps.InjectActiveCells(mesh, activeCells, no_data_value)
+activeCellsMap = Maps.InjectActiveCells(
+    mesh, activeCells, no_data_value, n_blocks=n_blocks
+)
+
+
+# Create reference and starting model
+def get_model(input_value, vector=vector_property):
+    # Loading a model file
+    if isinstance(input_value, str):
+
+        if not vector:
+            model = input_mesh.readModelUBC(workDir + input_value)
+            # model = np.c_[model]
+        else:
+
+            if "fld" in input_value:
+                model = Utils.io_utils.readVectorUBC(mesh, workDir + input_value)
+                # Flip the last vector back assuming ATP
+                model[:, -1] *= -1
+            else:
+                model = input_mesh.readModelUBC(workDir + input_value)
+                model = np.c_[model, np.zeros((model.shape[0], 2))]
+        # Transfer models from mesh to mesh
+        if mesh != input_mesh:
+            model = modelutils.transfer_to_mesh(input_mesh, mesh, model)
+            print("Reference model transfered to new mesh!")
+
+            file_name = outDir + input_value[:-4] + "_" + input_value[-4:]
+            if not vector:
+                if isinstance(mesh, Mesh.TreeMesh):
+                    Mesh.TreeMesh.writeUBC(
+                              mesh, outDir + 'OctreeMeshGlobal.msh',
+                              models={file_name: model}
+                            )
+                else:
+                    mesh.writeModelUBC(
+                          file_name, model
+                    )
+            else:
+                Utils.io_utils.writeVectorUBC(mesh, file_name, model)
+    else:
+        if not vector:
+            model = np.ones((mesh.nC, 1)) * model_reference[0]
+
+        else:
+            if np.r_[input_value].shape[0] == 3:
+                # Assumes reference specified as: AMP, DIP, AZIM
+                model = np.kron(np.c_[input_value], np.ones(mesh.nC)).T
+                model = mkvc(
+                    Utils.sdiag(model[:, 0]) *
+                    Utils.matutils.dipazm_2_xyz(model[:, 1], model[:, 2])
+                )
+            else:
+                # Assumes amplitude reference value in inducing field direction
+                model = np.kron(
+                    np.c_[
+                        input_value[0] *
+                        Utils.matutils.dipazm_2_xyz(
+                            dip=survey.srcField.param[1],
+                            azm_N=survey.srcField.param[2]
+                        )
+                    ], np.ones(mesh.nC)
+                )[0, :]
+
+    return model
+
+
+mref = get_model(model_reference)
+mstart = get_model(model_reference)
+
+# Reduce to active set
+if vector_property:
+    mref = mref[np.kron(np.ones(3), activeCells).astype('bool')]
+    mstart = mstart[np.kron(np.ones(3), activeCells).astype('bool')]
+else:
+    mref = mref[activeCells]
+    mstart = mstart[activeCells]
+
+# Homogeneous inversion only coded for scalar values for now
+if (inversion_style == "homogeneous_units") and not vector_property:
+    units = np.unique(mstart).tolist()
+
+    # Build list of indecies for the geounits
+    index = []
+    for unit in units:
+        index.append(mstart==unit)
+    nC = len(index)
+
+    # Collapse mstart and mref to the median reference values
+    mstart = np.asarray([np.median(mref[mref == unit]) for unit in units])
+
+    # Collapse mstart and mref to the median unit values
+    mref = mstart.copy() #np.asarray([np.median(mref[units==unit]) for unit in units])
+
+    model_map = Maps.SurjectUnits(index)
+    regularization_map = Maps.IdentityMap(nP=nC)
+    regularization_mesh = Mesh.TensorMesh([nC])
+    regularization_actv = np.ones(nC, dtype='bool')
+else:
+    if vector_property:
+        model_map = Maps.IdentityMap(nP=3*nC)
+        regularization_map = Maps.Wires(('p', nC), ('s', nC), ('t', nC))
+    else:
+        model_map = Maps.IdentityMap(nP=nC)
+        regularization_map = Maps.IdentityMap(nP=nC)
+    regularization_mesh = mesh
+    regularization_actv = activeCells
 
 # Create identity map
-if input_dict["inversion_type"] in ['mvi', 'mvis']:
+if vector_property:
     global_weights = np.zeros(3*nC)
 else:
     idenMap = Maps.IdentityMap(nP=nC)
@@ -749,13 +874,13 @@ def createLocalProb(meshLocal, local_survey, global_weights, ind):
     else:
         nBlock = 1
 
-    tileMap = Maps.Tile(
+    tile_map = Maps.Tile(
         (mesh, activeCells),
         (meshLocal, activeCells_t),
         nBlock=nBlock
     )
 
-    activeCells_t = tileMap.activeLocal
+    activeCells_t = tile_map.activeLocal
 
     if "adjust_clearance" in list(input_dict.keys()):
 
@@ -773,7 +898,7 @@ def createLocalProb(meshLocal, local_survey, global_weights, ind):
 
     if input_dict["inversion_type"] == 'grav':
         prob = PF.Gravity.GravityIntegral(
-            meshLocal, rhoMap=tileMap, actInd=activeCells_t,
+            meshLocal, rhoMap=tile_map*model_map, actInd=activeCells_t,
             parallelized=parallelized,
             Jpath=outDir + "Tile" + str(ind) + ".zarr",
             maxRAM=max_ram,
@@ -783,7 +908,7 @@ def createLocalProb(meshLocal, local_survey, global_weights, ind):
 
     elif input_dict["inversion_type"] == 'mag':
         prob = PF.Magnetics.MagneticIntegral(
-            meshLocal, chiMap=tileMap, actInd=activeCells_t,
+            meshLocal, chiMap=tile_map*model_map, actInd=activeCells_t,
             parallelized=parallelized,
             Jpath=outDir + "Tile" + str(ind) + ".zarr",
             maxRAM=max_ram,
@@ -793,7 +918,7 @@ def createLocalProb(meshLocal, local_survey, global_weights, ind):
 
     elif input_dict["inversion_type"] in ['mvi', 'mvis']:
         prob = PF.Magnetics.MagneticIntegral(
-            meshLocal, chiMap=tileMap, actInd=activeCells_t,
+            meshLocal, chiMap=tile_map*model_map, actInd=activeCells_t,
             parallelized=parallelized,
             Jpath=outDir + "Tile" + str(ind) + ".zarr",
             maxRAM=max_ram,
@@ -808,7 +933,7 @@ def createLocalProb(meshLocal, local_survey, global_weights, ind):
     local_misfit = DataMisfit.l2_DataMisfit(local_survey)
     local_misfit.W = 1./local_survey.std
 
-    wr = prob.getJtJdiag(np.ones(tileMap.shape[1]), W=local_misfit.W)
+    wr = prob.getJtJdiag(np.ones_like(mstart), W=local_misfit.W)
 
     activeCellsTemp = Maps.InjectActiveCells(mesh, activeCells, 1e-8)
 
@@ -864,31 +989,20 @@ global_weights = (global_weights/np.max(global_weights))
 if isinstance(mesh, Mesh.TreeMesh):
     Mesh.TreeMesh.writeUBC(
               mesh, outDir + 'OctreeMeshGlobal.msh',
-              models={outDir + 'SensWeights.mod': activeCellsMap*global_weights[:nC]}
+              models={outDir + 'SensWeights.mod': (activeCellsMap*model_map*global_weights)[:mesh.nC]}
             )
 else:
     mesh.writeModelUBC(
-          'SensWeights.mod', activeCellsMap*global_weights[:nC]
+          'SensWeights.mod', (activeCellsMap*model_map*global_weights)[:mesh.nC]
     )
 
-if input_dict["inversion_type"] in ['grav', 'mag']:
-
-    if isinstance(model_reference, str):
-
-        mref = input_mesh.readModelUBC(workDir + model_reference)
-
-        # Check if the mesh is different, than interpolate
-        # if input_mesh.nC != mesh.nC:
-            # Need an interpolation here
-
-        mref = mref[activeCells]
-    else:
-        mref = np.ones(nC) * model_reference[0]
-
+if not vector_property:
 
     # Create a regularization function
     reg = Regularization.Sparse(
-        mesh, indActive=activeCells, mapping=idenMap,
+        regularization_mesh,
+        indActive=regularization_actv,
+        mapping=regularization_map,
         alpha_s=alphas[0],
         alpha_x=alphas[1],
         alpha_y=alphas[2],
@@ -898,73 +1012,34 @@ if input_dict["inversion_type"] in ['grav', 'mag']:
     reg.cell_weights = global_weights
     reg.mref = mref
 
-    if isinstance(model_start, str):
-        mstart = mesh.readModelUBC(workDir + model_start)
-        mstart = mstart[activeCells]
-    else:
-        mstart = np.ones(nC) * model_start[0]
-
 else:
-
-    if isinstance(model_reference, str):
-        mref = Utils.io_utils.readVectorUBC(mesh, workDir + model_reference)
-
-        # Flip the last vector back assuming ATP
-        mref[:, -1] *= -1
-        mref = mref[activeCells, :]
-
-    elif np.r_[model_reference].shape[0] == 3:
-        # Assumes reference specified as: AMP, DIP, AZIM
-        mref = np.kron(np.c_[model_reference], np.ones(nC)).T
-        mref = mkvc(Utils.sdiag(mref[:, 0]) * Utils.matutils.dipazm_2_xyz(mref[:, 1], mref[:, 2]))
-    else:
-        # Assumes amplitude reference value in inducing field direction
-        mref = np.kron(np.c_[model_reference[0] * Utils.matutils.dipazm_2_xyz(dip=survey.srcField.param[1], azm_N=survey.srcField.param[2])], np.ones(nC))[0, :]
-
-    if isinstance(model_start, str):
-        mstart = Utils.io_utils.readVectorUBC(mesh, workDir + model_start)
-
-        # Flip the last vector back assuming ATP
-        mstart[:, -1] *= -1
-        mstart = mstart[activeCells, :]
-
-    elif np.r_[model_start].shape[0] == 3:
-        # Assumes start specified as: AMP, DIP, AZIM
-        mstart = np.kron(np.c_[model_start], np.ones(nC)).T
-        mstart = mkvc(Utils.sdiag(mstart[:, 0]) * Utils.matutils.dipazm_2_xyz(mstart[:, 1], mstart[:, 2]))
-    else:
-        # Assumes amplitude start value in inducing field direction
-        mstart = np.kron(np.c_[model_start[0] * Utils.matutils.dipazm_2_xyz(dip=survey.srcField.param[1], azm_N=survey.srcField.param[2])], np.ones(nC))[0, :]
-
-    # Create a block diagonal regularization
-    wires = Maps.Wires(('p', nC), ('s', nC), ('t', nC))
 
     # Create a regularization
     reg_p = Regularization.Sparse(
-        mesh, indActive=activeCells, mapping=wires.p,
+        mesh, indActive=activeCells, mapping=regularization_map.p,
         alpha_s=alphas[0],
         alpha_x=alphas[1],
         alpha_y=alphas[2],
         alpha_z=alphas[3]
     )
-    reg_p.cell_weights = (wires.p * global_weights)
+    reg_p.cell_weights = (regularization_map.p * global_weights)
     reg_p.norms = np.c_[2, 2, 2, 2]
     reg_p.mref = mref
 
     reg_s = Regularization.Sparse(
-        mesh, indActive=activeCells, mapping=wires.s,
+        mesh, indActive=activeCells, mapping=regularization_map.s,
         alpha_s=alphas[4],
         alpha_x=alphas[5],
         alpha_y=alphas[6],
         alpha_z=alphas[7]
     )
 
-    reg_s.cell_weights = (wires.s * global_weights)
+    reg_s.cell_weights = (regularization_map.s * global_weights)
     reg_s.norms = np.c_[2, 2, 2, 2]
     reg_s.mref = mref
 
     reg_t = Regularization.Sparse(
-        mesh, indActive=activeCells, mapping=wires.t,
+        mesh, indActive=activeCells, mapping=regularization_map.t,
         alpha_s=alphas[8],
         alpha_x=alphas[9],
         alpha_y=alphas[10],
@@ -972,7 +1047,7 @@ else:
     )
 
     reg_t.alphas = alphas[8:]
-    reg_t.cell_weights = (wires.t * global_weights)
+    reg_t.cell_weights = (regularization_map.t * global_weights)
     reg_t.norms = np.c_[2, 2, 2, 2]
     reg_t.mref = mref
 
@@ -980,38 +1055,51 @@ else:
     reg = reg_p + reg_s + reg_t
 
 # Specify how the optimization will proceed, set susceptibility bounds to inf
-opt = Optimization.ProjectedGNCG(maxIter=max_global_iterations, lower=lower_bound,
-                                 upper=upper_bound, maxIterLS=20,
-                                 maxIterCG=30, tolCG=1e-3)
+opt = Optimization.ProjectedGNCG(
+    maxIter=max_global_iterations, lower=lower_bound, upper=upper_bound,
+    maxIterLS=20, maxIterCG=30, tolCG=1e-3
+)
 
 # Create the default L2 inverse problem from the above objects
-invProb = InvProblem.BaseInvProblem(global_misfit, reg, opt)
+invProb = InvProblem.BaseInvProblem(global_misfit, reg, opt, beta=initial_beta)
 
-# Specify how the initial beta is found
-# if input_dict["inversion_type"] in ['mvi', 'mvis']:
-betaest = Directives.BetaEstimate_ByEig(beta0_ratio=1e+1)
+# Add a list of directives to the inversion
+directiveList = []
+
+# Save model
+directiveList.append(Directives.SaveOutputEveryIteration(save_txt=False))
+directiveList.append(Directives.SaveUBCModelEveryIteration(
+    mapping=activeCellsMap*model_map,
+    mesh=mesh,
+    fileName=outDir + input_dict["inversion_type"],
+    vector=input_dict["inversion_type"][0:3] == 'mvi'
+)
+)
+
+if initial_beta is None:
+    directiveList.append(Directives.BetaEstimate_ByEig(beta0_ratio=1e+1))
 
 # Pre-conditioner
 update_Jacobi = Directives.UpdatePreconditioner()
 
 IRLS = Directives.Update_IRLS(
                         f_min_change=1e-3, minGNiter=1, beta_tol=0.25,
-                        maxIRLSiter=max_irls_iterations, chifact_target=target_chi,
+                        maxIRLSiter=max_irls_iterations,
+                        chifact_target=target_chi,
                         betaSearch=False)
 
-# Save model
-saveDict = Directives.SaveOutputEveryIteration(save_txt=False)
-saveIt = Directives.SaveUBCModelEveryIteration(
-    mapping=activeCellsMap, fileName=outDir + input_dict["inversion_type"],
-    vector=input_dict["inversion_type"][0:3] == 'mvi'
+# Put all the parts together
+inv = Inversion.BaseInversion(
+    invProb, directiveList=directiveList + [IRLS, update_Jacobi]
 )
 
-# Put all the parts together
-inv = Inversion.BaseInversion(invProb,
-                              directiveList=[saveIt, saveDict, betaest, IRLS, update_Jacobi])
-
 # SimPEG reports half phi_d, so we scale to matrch
-print("Start Inversion\nTarget Misfit: %.2e (%.0f data with chifact = %g)" % (0.5*target_chi*len(survey.std), len(survey.std), target_chi))
+print(
+    "Start Inversion: " + inversion_style +
+    "\nTarget Misfit: %.2e (%.0f data with chifact = %g)" % (
+        0.5*target_chi*len(survey.std), len(survey.std), target_chi
+    )
+)
 
 # Run the inversion
 mrec = inv.run(mstart)
@@ -1073,12 +1161,12 @@ if input_dict["inversion_type"] == 'mvis':
             # Spherical or sparse
             max_irls_iterations = 20
 
-    # Extract the vector components for the MVI-S
-    x = activeCellsMap * (wires.p * invProb.model)
-    y = activeCellsMap * (wires.s * invProb.model)
-    z = activeCellsMap * (wires.t * invProb.model)
+    # # Extract the vector components for the MVI-S
+    # x = activeCellsMap * (regularization_map.p * invProb.model)
+    # y = activeCellsMap * (regularization_map.s * invProb.model)
+    # z = activeCellsMap * (regularization_map.t * invProb.model)
 
-    amp = (np.sum(np.c_[x, y, z]**2., axis=1))**0.5
+    # amp = (np.sum(np.c_[x, y, z]**2., axis=1))**0.5
 
     # Get predicted data for each tile and form/write full predicted to file
     if getattr(global_misfit, 'objfcts', None) is not None:
@@ -1107,13 +1195,10 @@ if input_dict["inversion_type"] == 'mvis':
         global_misfit.prob.coordinate_system = 'spherical'
         global_misfit.prob.model = mstart
 
-    # Create a block diagonal regularization
-    wires = Maps.Wires(('amp', nC), ('theta', nC), ('phi', nC))
-
     # Create a regularization
     reg_a = Regularization.Sparse(
         mesh, indActive=activeCells,
-        mapping=wires.amp, gradientType=gradient_type,
+        mapping=regularization_map.p, gradientType=gradient_type,
         alpha_s=alphas_mvis[0],
         alpha_x=alphas_mvis[1],
         alpha_y=alphas_mvis[2],
@@ -1124,7 +1209,7 @@ if input_dict["inversion_type"] == 'mvis':
 
     reg_t = Regularization.Sparse(
         mesh, indActive=activeCells,
-        mapping=wires.theta, gradientType=gradient_type,
+        mapping=regularization_map.s, gradientType=gradient_type,
         alpha_s=alphas_mvis[4],
         alpha_x=alphas_mvis[5],
         alpha_y=alphas_mvis[6],
@@ -1137,7 +1222,7 @@ if input_dict["inversion_type"] == 'mvis':
 
     reg_p = Regularization.Sparse(
         mesh, indActive=activeCells,
-        mapping=wires.phi, gradientType=gradient_type,
+        mapping=regularization_map.t, gradientType=gradient_type,
         alpha_s=alphas_mvis[8],
         alpha_x=alphas_mvis[9],
         alpha_y=alphas_mvis[10],
@@ -1182,7 +1267,11 @@ if input_dict["inversion_type"] == 'mvis':
     update_SensWeight = Directives.UpdateSensitivityWeights()
     update_Jacobi = Directives.UpdatePreconditioner()
     saveDict = Directives.SaveOutputEveryIteration(save_txt=False)
-    saveModel = Directives.SaveUBCModelEveryIteration(mapping=activeCellsMap, vector=True)
+    saveModel = Directives.SaveUBCModelEveryIteration(
+        mapping=activeCellsMap,
+        mesh=mesh,
+        vector=True
+    )
     saveModel.fileName = outDir + input_dict["inversion_type"] + "_s"
 
     inv = Inversion.BaseInversion(invProb,
@@ -1244,69 +1333,3 @@ if input_dict["inversion_type"] == 'mvis':
     Utils.io_utils.writeUBCmagneticsObservations(
         outDir + 'Predicted_mvis.pre', survey, dpred+data_trend
     )
-
-###############################################################################
-# FORWARD
-
-if "forward" in list(input_dict.keys()):
-    if input_dict["forward"][0] == "drape":
-        print("DRAPED")
-        # Define an octree mesh based on the data
-        nx = int((rxLoc[:, 0].max()-rxLoc[:, 0].min()) / input_dict["forward"][1])
-        ny = int((rxLoc[:, 1].max()-rxLoc[:, 1].min()) / input_dict["forward"][2])
-        vectorX = np.linspace(rxLoc[:, 0].min(), rxLoc[:, 0].max(), nx)
-        vectorY = np.linspace(rxLoc[:, 1].min(), rxLoc[:, 1].max(), ny)
-
-        x, y = np.meshgrid(vectorX, vectorY)
-
-        # Only keep points within max distance
-        tree = cKDTree(np.c_[rxLoc[:, 0], rxLoc[:, 1]])
-        # xi = _ndim_coords_from_arrays(, ndim=2)
-        dists, indexes = tree.query(np.c_[mkvc(x), mkvc(y)])
-
-        x = mkvc(x)[dists < input_dict["forward"][4]]
-        y = mkvc(y)[dists < input_dict["forward"][4]]
-
-        z = topo_interp_function(mkvc(x), mkvc(y)) + input_dict["forward"][3]
-        newLocs = np.c_[mkvc(x), mkvc(y), mkvc(z)]
-
-    elif input_dict["forward"][0] == "upwardcontinuation":
-        newLocs = rxLoc.copy()
-        newLocs[:, 2] += input_dict["forward"][1]
-
-    if input_dict["inversion_type"] == 'grav':
-        rxLoc = PF.BaseGrav.RxObs(newLocs)
-        srcField = PF.BaseGrav.SrcField([rxLoc])
-        forward = PF.BaseGrav.LinearSurvey(srcField)
-
-    elif input_dict["inversion_type"] in ['mvi', 'mvis', 'mag']:
-        rxLoc = PF.BaseMag.RxObs(newLocs)
-        srcField = PF.BaseMag.SrcField([rxLoc], param=survey.srcField.param)
-        forward = PF.BaseMag.LinearSurvey(srcField)
-
-    forward.std = np.ones(newLocs.shape[0])
-
-    activeGlobal = (activeCellsMap * invProb.model) != no_data_value
-    idenMap = Maps.IdentityMap(nP=int(activeGlobal.sum()))
-
-    if input_dict["inversion_type"] == 'grav':
-        fwrProb = PF.Gravity.GravityIntegral(
-            mesh, rhoMap=idenMap, actInd=activeCells,
-            n_cpu=n_cpu, forwardOnly=True, rxType='xyz'
-            )
-    elif input_dict["inversion_type"] == 'mag':
-        fwrProb = PF.Magnetics.MagneticIntegral(
-            mesh, chiMap=idenMap, actInd=activeCells,
-            n_cpu=n_cpu, forwardOnly=True, rxType='xyz'
-            )
-
-    forward.pair(fwrProb)
-    pred = fwrProb.fields(invProb.model)
-
-    if input_dict["inversion_type"] == 'grav':
-
-        Utils.io_utils.writeUBCgravityObservations(outDir + 'Forward.dat', forward, pred)
-
-    elif input_dict["inversion_type"] == 'mag':
-
-        Utils.io_utils.writeUBCmagneticsObservations(outDir + 'Forward.dat', forward, pred)
