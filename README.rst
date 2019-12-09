@@ -19,9 +19,9 @@ Optional with [DEFAULT]
 
 
 * ``inversion_style``: str
-    Style of model
-        [``voxel``]: Standard voxel base inversion
-        ``homogeneous_units``: Invert for best-fitting value for geological units defined by the reference model
+    Inversion style chosen from:
+        - [``voxel``]: Standard voxel base inversion
+        - ``homogeneous_units``: Invert for best-fitting value for every unique domains defined by the reference model
 * ``result_folder``: str
     Directory used to output the results ["SimPEG_PFInversion"]
 * ``detrend``: dict {str: int}
