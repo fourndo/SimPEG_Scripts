@@ -7,20 +7,21 @@ To run an inversion, open a command terminal and type:
 
 ``python PF_inversion.py your_project_directory\PF_inversion_input.json``
 
-Mandatory
----------
+Parameters
+----------
 
 * "data_type": Data file format, either "ubc_grav", "ubc_mag"
 * "inversion_type": Inversion type, one of 'grav', 'mag', 'mvi', or 'mvis'
 * "core_cell_size": [dx,dy,dz] Dimensions of the smallest cell size in the mesh.
 
-Optional
---------
+Optional with [DEFAULT]
+-----------------------
 
-[DEFAULT]
 
-* "result_folder": Directory used to output the results ["SimPEG_PFInversion"]
-* "detrend": ["points", order] Remove trend from the data. 
+
+* `result_folder`:  str
+    Directory used to output the results ["SimPEG_PFInversion"]
+* "detrend": ["points", order] Remove trend from the data.
 			  "points" is either "all" (all points), or "corners"
 			  order is integer 0, 1, or 2 for trend order
 * "new_uncert": [Percent, floor] Values to be used for uncertainties.
@@ -35,7 +36,7 @@ Optional
                      [value, value, value], Reference property, vector [0, 0, 0]
     				 If scalar input used for vector model, assume scalar amplitude in inducing field direction.
 * "model_start": ["filename"], Load starting model from file.
-                 [value], Start property, scalar [1e-4]. 
+                 [value], Start property, scalar [1e-4].
                  [value, value, value], Start property, vector [1e-4, 1e-4, 1e-4]
 				 If scalar input used for vector model, assume scalar amplitude in inducing field direction.
 * "alphas": [value, value, value, value], Alpha weights, can specify 4 or 12 values as required. [1,1,1,1,1,1,1,1,1,1,1,1]
