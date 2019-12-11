@@ -44,9 +44,9 @@ Optional settings: type = DEFAULT
 * ``drape_data``: float = None
     Value defining the drape height above topography. If ``drape_data`` is used, the Z elevation of receivers are over-written
 * ``input_mesh_file``: str = None
-    Mesh file in UBC format used to load the ``model_reference`` and ``model_start``. Also use for the inversion if ``inversion_mesh_type`` is same type as mesh.
+    Mesh file in UBC format used to load the ``model_reference`` and ``model_start``. The same mesh is used for the inversion if ``inversion_mesh_type`` is same type.
 * ``inversion_mesh_type``: str = "tree"
-    Type of mesh to be used in the inversion. If type differs from the ``input_mesh_file``, then the input ``model_reference`` and ``model_start`` are interpolated.
+    Type of mesh to be used in the inversion. If type differs from the ``input_mesh_file``, then the input ``model_reference`` and ``model_start`` are trasnfered over using a NearestNeighbour interpolation.
 * ``inversion_style``: str
     Inversion style chosen from:
         - ``voxel``: Standard voxel base inversion [DEFAULT]

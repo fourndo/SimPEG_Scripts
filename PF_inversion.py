@@ -772,7 +772,7 @@ def get_model(input_value, vector=vector_property):
                 Utils.io_utils.writeVectorUBC(mesh, file_name, model)
     else:
         if not vector:
-            model = np.ones((mesh.nC, 1)) * model_reference[0]
+            model = np.ones(mesh.nC) * input_value[0]
 
         else:
             if np.r_[input_value].shape[0] == 3:
@@ -798,7 +798,7 @@ def get_model(input_value, vector=vector_property):
 
 
 mref = get_model(model_reference)
-mstart = get_model(model_reference)
+mstart = get_model(model_start)
 
 # Reduce to active set
 if vector_property:
