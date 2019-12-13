@@ -709,7 +709,7 @@ if show_graphics:
 
 # Compute active cells
 print("Calculating global active cells from topo")
-activeCells = Utils.surface2ind_topo(mesh, topo, gridLoc='CC')
+activeCells = Utils.surface2ind_topo(mesh, topo)
 
 if isinstance(mesh, Mesh.TreeMesh):
     Mesh.TreeMesh.writeUBC(
