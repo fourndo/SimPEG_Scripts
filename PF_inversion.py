@@ -301,13 +301,13 @@ if (
     max_irls_iterations = input_dict["max_irls_iterations"]
     assert max_irls_iterations >= 0, "Max IRLS iterations must be >= 0"
 else:
-    if (input_dict["inversion_type"] == 'mvi') or (np.all(model_norms == 2)):
-        # Cartesian or not sparse
-        max_irls_iterations = 0
-
-    else:
+    if (input_dict["inversion_type"] == 'mvis') and (np.any(model_norms != 2)):
         # Spherical or sparse
         max_irls_iterations = 20
+
+    else:
+        # Cartesian or not sparse
+        max_irls_iterations = 0
 
 if "max_global_iterations" in list(input_dict.keys()):
     max_global_iterations = input_dict["max_global_iterations"]
