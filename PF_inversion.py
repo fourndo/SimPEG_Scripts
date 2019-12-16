@@ -30,9 +30,7 @@ from SimPEG.Utils import mkvc, matutils, modelutils
 import SimPEG.PF as PF
 from discretize.utils import meshutils
 from scipy.interpolate import NearestNDInterpolator, LinearNDInterpolator
-from scipy.spatial import cKDTree, ConvexHull
-from scipy.linalg import lstsq
-
+from scipy.spatial import cKDTree
 
 dsep = os.path.sep
 input_file = sys.argv[1]
@@ -56,7 +54,8 @@ else:
 with open(input_file, 'r') as f:
     driver = json.load(f)
 
-input_dict = {k.lower() if isinstance(k, str) else k: v.lower() if isinstance(v, str) else v for k,v in driver.items()}
+input_dict = {k.lower() if isinstance(k, str) else k: 
+              v.lower() if isinstance(v, str) else v for k,v in driver.items()}
 
 assert "inversion_type" in list(input_dict.keys()), (
     "Require 'inversion_type' to be set: 'grav', 'mag', 'mvi', or 'mvis'"
@@ -515,8 +514,6 @@ def createLocalMesh(rxLoc, ind_t):
         local_survey.std = survey.std[ind_t]
         local_survey.ind = ind_t
 
-        # Utils.io_utils.writeUBCgravityObservations(outDir + "Tile" + str(ind) + '.dat', local_survey, local_survey.dobs)
-
     elif input_dict["inversion_type"] in ['mag', 'mvi', 'mvis']:
         rxLoc_t = PF.BaseMag.RxObs(rxLoc[ind_t, :])
         srcField = PF.BaseMag.SrcField([rxLoc_t], param=survey.srcField.param)
@@ -529,8 +526,6 @@ def createLocalMesh(rxLoc, ind_t):
         local_survey.dobs = survey.dobs[dataInd]
         local_survey.std = survey.std[dataInd]
         local_survey.ind = ind_t
-
-        # Utils.io_utils.writeUBCmagneticsObservations(outDir + "Tile" + str(ind) + '.dat', local_survey, local_survey.dobs)
 
     meshLocal = meshutils.mesh_builder_xyz(
         topo_elevations_at_data_locs,
@@ -1099,13 +1094,16 @@ print(
 # Run the inversion
 mrec = inv.run(mstart)
 
-print("Target Misfit: %.3e (%.0f data with chifact = %g)" % (0.5*target_chi*len(survey.std), len(survey.std), target_chi))
-print("Final Misfit:  %.3e" % (0.5 * np.sum(((survey.dobs - invProb.dpred)/survey.std)**2.)))
+print("Target Misfit: %.3e (%.0f data with chifact = %g)" %
+      (0.5*target_chi*len(survey.std), len(survey.std), target_chi))
+print("Final Misfit:  %.3e" %
+      (0.5 * np.sum(((survey.dobs - invProb.dpred)/survey.std)**2.)))
 
+breakpoint()
 if show_graphics:
     # Plot convergence curves
     fig, axs = plt.figure(), plt.subplot()
-    axs.plot(saveDict.phi_d, 'ko-', lw=2)
+    axs.plot(inversion_output.phi_d, 'ko-', lw=2)
     phi_d_target = 0.5*target_chi*len(survey.std)
     left, right = plt.xlim()
     axs.plot(
@@ -1135,11 +1133,15 @@ else:
 
 if input_dict["inversion_type"] == 'grav':
 
-    Utils.io_utils.writeUBCgravityObservations(outDir + 'Predicted_' + input_dict["inversion_type"] + '.dat', survey, dpred+data_trend)
+    Utils.io_utils.writeUBCgravityObservations(
+            outDir + 'Predicted_' + input_dict["inversion_type"] + '.dat', 
+            survey, dpred+data_trend)
 
 elif input_dict["inversion_type"] in ['mvi', 'mvis', 'mag']:
 
-    Utils.io_utils.writeUBCmagneticsObservations(outDir + 'Predicted_' + input_dict["inversion_type"][:3] + '.dat', survey, dpred+data_trend)
+    Utils.io_utils.writeUBCmagneticsObservations(
+            outDir + 'Predicted_' + input_dict["inversion_type"][:3] + '.dat',
+            survey, dpred+data_trend)
 
 # Repeat inversion in spherical
 if input_dict["inversion_type"] == 'mvis':
@@ -1279,8 +1281,10 @@ if input_dict["inversion_type"] == 'mvis':
     print("Run Spherical inversion")
     mrec_S = inv.run(mstart)
 
-    print("Target Misfit: %.3e (%.0f data with chifact = %g)" % (0.5*target_chi*len(survey.std), len(survey.std), target_chi))
-    print("Final Misfit:  %.3e" % (0.5 * np.sum(((survey.dobs - invProb.dpred)/survey.std)**2.)))
+    print("Target Misfit: %.3e (%.0f data with chifact = %g)" % 
+          (0.5*target_chi*len(survey.std), len(survey.std), target_chi))
+    print("Final Misfit:  %.3e" % 
+          (0.5 * np.sum(((survey.dobs - invProb.dpred)/survey.std)**2.)))
 
     if show_graphics:
         # Plot convergence curves
