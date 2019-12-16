@@ -1095,7 +1095,6 @@ print("Target Misfit: %.3e (%.0f data with chifact = %g)" %
 print("Final Misfit:  %.3e" %
       (0.5 * np.sum(((survey.dobs - invProb.dpred)/survey.std)**2.)))
 
-breakpoint()
 if show_graphics:
     # Plot convergence curves
     fig, axs = plt.figure(), plt.subplot()
