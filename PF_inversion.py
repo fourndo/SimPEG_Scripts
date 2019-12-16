@@ -140,35 +140,40 @@ if (
     "detrend" in list(input_dict.keys()) and
     input_dict["data_type"] in ['ubc_mag', 'ubc_grav']
 ):
-    trend_method = input_dict["detrend"][0]
-    trend_order = input_dict["detrend"][1]
+    if "all" in list(input_dict["detrend"].keys()):
+        method = 'all'
+        order = input_dict["detrend"]["all"]
 
-    assert trend_method in ['all', 'corners'], (
-        "trend_method must be 'all', or 'corners'"
-    )
+    elif "corners" in list(input_dict["detrend"].keys()):
+        method = 'corners'
+        order = input_dict["detrend"]["corners"]
+    else:
+        assert ("detrend key must be 'all', or 'corners'")
+    
+    assert order in [0, 1, 2], "detrend_order must be 0, 1, or 2"
 
-    assert trend_order in [0, 1, 2], "trend_order must be 0, 1, or 2"
+    data_trend, _ = matutils.calculate_2D_trend(
+            rxLoc, survey.dobs, order, method
+            )
 
-    data_trend = matutils.calculate_2D_trend(rxLoc, survey.dobs)
-
-    survey.dobs -= trend
+    survey.dobs -= data_trend
 
     if input_dict["data_type"] in ['ubc_mag']:
         Utils.io_utils.writeUBCmagneticsObservations(os.path.splitext(
-            workDir + input_dict["data_file"])[0] + '_trend.mag',
+            outDir + input_dict["data_file"])[0] + '_trend.mag',
             survey, data_trend
         )
         Utils.io_utils.writeUBCmagneticsObservations(os.path.splitext(
-            workDir + input_dict["data_file"])[0] + '_detrend.mag',
+            outDir + input_dict["data_file"])[0] + '_detrend.mag',
             survey, survey.dobs
         )
     else:
         Utils.io_utils.writeUBCgravityObservations(os.path.splitext(
-            workDir + input_dict["data_file"])[0] + '_trend.mag',
+            outDir + input_dict["data_file"])[0] + '_trend.mag',
             survey, data_trend
         )
         Utils.io_utils.writeUBCgravityObservations(os.path.splitext(
-            workDir + input_dict["data_file"])[0] + '_detrend.mag',
+            outDir + input_dict["data_file"])[0] + '_detrend.mag',
             survey, survey.dobs
         )
 else:
