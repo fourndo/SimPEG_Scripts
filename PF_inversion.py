@@ -225,7 +225,7 @@ if "inversion_mesh_type" in list(input_dict.keys()):
 else:
 
     if input_mesh is not None:
-        inversion_mesh_type = mesh._meshType
+        inversion_mesh_type = input_mesh._meshType
     else:
         inversion_mesh_type = "TREE"
 
