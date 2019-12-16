@@ -30,9 +30,7 @@ from SimPEG.Utils import mkvc, matutils, modelutils
 import SimPEG.PF as PF
 from discretize.utils import meshutils
 from scipy.interpolate import NearestNDInterpolator, LinearNDInterpolator
-from scipy.spatial import cKDTree, ConvexHull
-from scipy.linalg import lstsq
-
+from scipy.spatial import cKDTree
 
 dsep = os.path.sep
 input_file = sys.argv[1]
@@ -56,7 +54,8 @@ else:
 with open(input_file, 'r') as f:
     driver = json.load(f)
 
-input_dict = {k.lower() if isinstance(k, str) else k: v.lower() if isinstance(v, str) else v for k,v in driver.items()}
+input_dict = {k.lower() if isinstance(k, str) else k:
+              v.lower() if isinstance(v, str) else v for k,v in driver.items()}
 
 assert "inversion_type" in list(input_dict.keys()), (
     "Require 'inversion_type' to be set: 'grav', 'mag', 'mvi', or 'mvis'"
@@ -140,35 +139,36 @@ if (
     "detrend" in list(input_dict.keys()) and
     input_dict["data_type"] in ['ubc_mag', 'ubc_grav']
 ):
-    trend_method = input_dict["detrend"][0]
-    trend_order = input_dict["detrend"][1]
 
-    assert trend_method in ['all', 'corners'], (
-        "trend_method must be 'all', or 'corners'"
-    )
+    for key, value in input_dict["detrend"].items():
+        assert key in ["all", "corners"], "detrend key must be 'all' or 'corners'"
+        assert value in [0, 1, 2], "detrend_order must be 0, 1, or 2"
 
-    assert trend_order in [0, 1, 2], "trend_order must be 0, 1, or 2"
+        method = key
+        order = value
 
-    data_trend = matutils.calculate_2D_trend(rxLoc, survey.dobs)
+    data_trend, _ = matutils.calculate_2D_trend(
+            rxLoc, survey.dobs, order, method
+            )
 
-    survey.dobs -= trend
+    survey.dobs -= data_trend
 
     if input_dict["data_type"] in ['ubc_mag']:
         Utils.io_utils.writeUBCmagneticsObservations(os.path.splitext(
-            workDir + input_dict["data_file"])[0] + '_trend.mag',
+            outDir + input_dict["data_file"])[0] + '_trend.mag',
             survey, data_trend
         )
         Utils.io_utils.writeUBCmagneticsObservations(os.path.splitext(
-            workDir + input_dict["data_file"])[0] + '_detrend.mag',
+            outDir + input_dict["data_file"])[0] + '_detrend.mag',
             survey, survey.dobs
         )
     else:
         Utils.io_utils.writeUBCgravityObservations(os.path.splitext(
-            workDir + input_dict["data_file"])[0] + '_trend.mag',
+            outDir + input_dict["data_file"])[0] + '_trend.mag',
             survey, data_trend
         )
         Utils.io_utils.writeUBCgravityObservations(os.path.splitext(
-            workDir + input_dict["data_file"])[0] + '_detrend.mag',
+            outDir + input_dict["data_file"])[0] + '_detrend.mag',
             survey, survey.dobs
         )
 else:
@@ -220,7 +220,7 @@ if "inversion_mesh_type" in list(input_dict.keys()):
 else:
 
     if input_mesh is not None:
-        inversion_mesh_type = mesh._meshType
+        inversion_mesh_type = input_mesh._meshType
     else:
         inversion_mesh_type = "TREE"
 
@@ -510,8 +510,6 @@ def createLocalMesh(rxLoc, ind_t):
         local_survey.std = survey.std[ind_t]
         local_survey.ind = ind_t
 
-        # Utils.io_utils.writeUBCgravityObservations(outDir + "Tile" + str(ind) + '.dat', local_survey, local_survey.dobs)
-
     elif input_dict["inversion_type"] in ['mag', 'mvi', 'mvis']:
         rxLoc_t = PF.BaseMag.RxObs(rxLoc[ind_t, :])
         srcField = PF.BaseMag.SrcField([rxLoc_t], param=survey.srcField.param)
@@ -524,8 +522,6 @@ def createLocalMesh(rxLoc, ind_t):
         local_survey.dobs = survey.dobs[dataInd]
         local_survey.std = survey.std[dataInd]
         local_survey.ind = ind_t
-
-        # Utils.io_utils.writeUBCmagneticsObservations(outDir + "Tile" + str(ind) + '.dat', local_survey, local_survey.dobs)
 
     meshLocal = meshutils.mesh_builder_xyz(
         topo_elevations_at_data_locs,
@@ -822,7 +818,7 @@ if (inversion_style == "homogeneous_units") and not vector_property:
     mstart = np.asarray([np.median(mref[mref == unit]) for unit in units])
 
     # Collapse mstart and mref to the median unit values
-    mref = mstart.copy() #np.asarray([np.median(mref[units==unit]) for unit in units])
+    mref = mstart.copy()
 
     model_map = Maps.SurjectUnits(index)
     regularization_map = Maps.IdentityMap(nP=nC)
@@ -1056,7 +1052,8 @@ invProb = InvProblem.BaseInvProblem(global_misfit, reg, opt, beta=initial_beta)
 directiveList = []
 
 # Save model
-directiveList.append(Directives.SaveOutputEveryIteration(save_txt=False))
+inversion_output = Directives.SaveOutputEveryIteration(save_txt=False)
+directiveList.append(inversion_output)
 directiveList.append(Directives.SaveUBCModelEveryIteration(
     mapping=activeCellsMap*model_map,
     mesh=mesh,
@@ -1093,13 +1090,16 @@ print(
 # Run the inversion
 mrec = inv.run(mstart)
 
-print("Target Misfit: %.3e (%.0f data with chifact = %g)" % (0.5*target_chi*len(survey.std), len(survey.std), target_chi))
-print("Final Misfit:  %.3e" % (0.5 * np.sum(((survey.dobs - invProb.dpred)/survey.std)**2.)))
+print("Target Misfit: %.3e (%.0f data with chifact = %g)" %
+      (0.5*target_chi*len(survey.std), len(survey.std), target_chi))
+print("Final Misfit:  %.3e" %
+      (0.5 * np.sum(((survey.dobs - invProb.dpred)/survey.std)**2.)))
 
+breakpoint()
 if show_graphics:
     # Plot convergence curves
     fig, axs = plt.figure(), plt.subplot()
-    axs.plot(saveDict.phi_d, 'ko-', lw=2)
+    axs.plot(inversion_output.phi_d, 'ko-', lw=2)
     phi_d_target = 0.5*target_chi*len(survey.std)
     left, right = plt.xlim()
     axs.plot(
@@ -1109,7 +1109,7 @@ if show_graphics:
     plt.yscale('log')
 
     twin = axs.twinx()
-    twin.plot(saveDict.phi_m, 'k--', lw=2)
+    twin.plot(inversion_output.phi_m, 'k--', lw=2)
     plt.autoscale(enable=True, axis='both', tight=True)
 
     axs.set_ylabel('$\phi_d$', size=16, rotation=0)
@@ -1129,11 +1129,15 @@ else:
 
 if input_dict["inversion_type"] == 'grav':
 
-    Utils.io_utils.writeUBCgravityObservations(outDir + 'Predicted_' + input_dict["inversion_type"] + '.dat', survey, dpred+data_trend)
+    Utils.io_utils.writeUBCgravityObservations(
+            outDir + 'Predicted_' + input_dict["inversion_type"] + '.dat',
+            survey, dpred+data_trend)
 
 elif input_dict["inversion_type"] in ['mvi', 'mvis', 'mag']:
 
-    Utils.io_utils.writeUBCmagneticsObservations(outDir + 'Predicted_' + input_dict["inversion_type"][:3] + '.dat', survey, dpred+data_trend)
+    Utils.io_utils.writeUBCmagneticsObservations(
+            outDir + 'Predicted_' + input_dict["inversion_type"][:3] + '.dat',
+            survey, dpred+data_trend)
 
 # Repeat inversion in spherical
 if input_dict["inversion_type"] == 'mvis':
@@ -1255,31 +1259,33 @@ if input_dict["inversion_type"] == 'mvis':
     ProjSpherical = Directives.ProjSpherical()
     update_SensWeight = Directives.UpdateSensitivityWeights()
     update_Jacobi = Directives.UpdatePreconditioner()
-    saveDict = Directives.SaveOutputEveryIteration(save_txt=False)
-    saveModel = Directives.SaveUBCModelEveryIteration(
+    inversion_output = Directives.SaveOutputEveryIteration(save_txt=False)
+    save_model = Directives.SaveUBCModelEveryIteration(
         mapping=activeCellsMap,
         mesh=mesh,
         vector=True
     )
-    saveModel.fileName = outDir + input_dict["inversion_type"] + "_s"
+    save_model.fileName = outDir + input_dict["inversion_type"] + "_s"
 
     inv = Inversion.BaseInversion(invProb,
                                   directiveList=[
                                     ProjSpherical, IRLS, update_SensWeight,
-                                    update_Jacobi, saveModel, saveDict
+                                    update_Jacobi, save_model, inversion_output
                                     ])
 
     # Run the inversion
     print("Run Spherical inversion")
     mrec_S = inv.run(mstart)
 
-    print("Target Misfit: %.3e (%.0f data with chifact = %g)" % (0.5*target_chi*len(survey.std), len(survey.std), target_chi))
-    print("Final Misfit:  %.3e" % (0.5 * np.sum(((survey.dobs - invProb.dpred)/survey.std)**2.)))
+    print("Target Misfit: %.3e (%.0f data with chifact = %g)" %
+          (0.5*target_chi*len(survey.std), len(survey.std), target_chi))
+    print("Final Misfit:  %.3e" %
+          (0.5 * np.sum(((survey.dobs - invProb.dpred)/survey.std)**2.)))
 
     if show_graphics:
         # Plot convergence curves
         fig, axs = plt.figure(), plt.subplot()
-        axs.plot(saveDict.phi_d, 'ko-', lw=2)
+        axs.plot(inversion_output.phi_d, 'ko-', lw=2)
         phi_d_target = 0.5*target_chi*len(survey.std)
         left, right = plt.xlim()
         axs.plot(
@@ -1295,7 +1301,7 @@ if input_dict["inversion_type"] == 'mvis':
         )
 
         twin = axs.twinx()
-        twin.plot(saveDict.phi_m, 'k--', lw=2)
+        twin.plot(inversion_output.phi_m, 'k--', lw=2)
         plt.autoscale(enable=True, axis='both', tight=True)
         axs.text(
             IRLS.iterStart, top,
@@ -1309,7 +1315,8 @@ if input_dict["inversion_type"] == 'mvis':
         twin.set_ylabel('$\phi_m$', size=16, rotation=0)
         t = fig.get_size_inches()
         fig.set_size_inches(t[0]*2, t[1]*2)
-        fig.savefig(outDir + 'Convergence_curve_spherical.png', bbox_inches='tight', dpi=600)
+        fig.savefig(outDir + 'Convergence_curve_spherical.png',
+                    bbox_inches='tight', dpi=600)
         plt.show(block=False)
 
     if getattr(global_misfit, 'objfcts', None) is not None:
