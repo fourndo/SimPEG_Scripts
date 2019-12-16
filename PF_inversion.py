@@ -1061,7 +1061,8 @@ invProb = InvProblem.BaseInvProblem(global_misfit, reg, opt, beta=initial_beta)
 directiveList = []
 
 # Save model
-directiveList.append(Directives.SaveOutputEveryIteration(save_txt=False))
+inversion_output = Directives.SaveOutputEveryIteration(save_txt=False)
+directiveList.append(inversion_output)
 directiveList.append(Directives.SaveUBCModelEveryIteration(
     mapping=activeCellsMap*model_map,
     mesh=mesh,
@@ -1114,7 +1115,7 @@ if show_graphics:
     plt.yscale('log')
 
     twin = axs.twinx()
-    twin.plot(saveDict.phi_m, 'k--', lw=2)
+    twin.plot(inversion_output.phi_m, 'k--', lw=2)
     plt.autoscale(enable=True, axis='both', tight=True)
 
     axs.set_ylabel('$\phi_d$', size=16, rotation=0)
@@ -1260,18 +1261,18 @@ if input_dict["inversion_type"] == 'mvis':
     ProjSpherical = Directives.ProjSpherical()
     update_SensWeight = Directives.UpdateSensitivityWeights()
     update_Jacobi = Directives.UpdatePreconditioner()
-    saveDict = Directives.SaveOutputEveryIteration(save_txt=False)
-    saveModel = Directives.SaveUBCModelEveryIteration(
+    inversion_output = Directives.SaveOutputEveryIteration(save_txt=False)
+    save_model = Directives.SaveUBCModelEveryIteration(
         mapping=activeCellsMap,
         mesh=mesh,
         vector=True
     )
-    saveModel.fileName = outDir + input_dict["inversion_type"] + "_s"
+    save_model.fileName = outDir + input_dict["inversion_type"] + "_s"
 
     inv = Inversion.BaseInversion(invProb,
                                   directiveList=[
                                     ProjSpherical, IRLS, update_SensWeight,
-                                    update_Jacobi, saveModel, saveDict
+                                    update_Jacobi, save_model, inversion_output
                                     ])
 
     # Run the inversion
@@ -1284,7 +1285,7 @@ if input_dict["inversion_type"] == 'mvis':
     if show_graphics:
         # Plot convergence curves
         fig, axs = plt.figure(), plt.subplot()
-        axs.plot(saveDict.phi_d, 'ko-', lw=2)
+        axs.plot(inversion_output.phi_d, 'ko-', lw=2)
         phi_d_target = 0.5*target_chi*len(survey.std)
         left, right = plt.xlim()
         axs.plot(
@@ -1300,7 +1301,7 @@ if input_dict["inversion_type"] == 'mvis':
         )
 
         twin = axs.twinx()
-        twin.plot(saveDict.phi_m, 'k--', lw=2)
+        twin.plot(inversion_output.phi_m, 'k--', lw=2)
         plt.autoscale(enable=True, axis='both', tight=True)
         axs.text(
             IRLS.iterStart, top,
@@ -1314,7 +1315,8 @@ if input_dict["inversion_type"] == 'mvis':
         twin.set_ylabel('$\phi_m$', size=16, rotation=0)
         t = fig.get_size_inches()
         fig.set_size_inches(t[0]*2, t[1]*2)
-        fig.savefig(outDir + 'Convergence_curve_spherical.png', bbox_inches='tight', dpi=600)
+        fig.savefig(outDir + 'Convergence_curve_spherical.png', 
+                    bbox_inches='tight', dpi=600)
         plt.show(block=False)
 
     if getattr(global_misfit, 'objfcts', None) is not None:
