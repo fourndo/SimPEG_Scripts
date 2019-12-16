@@ -54,7 +54,7 @@ else:
 with open(input_file, 'r') as f:
     driver = json.load(f)
 
-input_dict = {k.lower() if isinstance(k, str) else k: 
+input_dict = {k.lower() if isinstance(k, str) else k:
               v.lower() if isinstance(v, str) else v for k,v in driver.items()}
 
 assert "inversion_type" in list(input_dict.keys()), (
@@ -139,17 +139,13 @@ if (
     "detrend" in list(input_dict.keys()) and
     input_dict["data_type"] in ['ubc_mag', 'ubc_grav']
 ):
-    if "all" in list(input_dict["detrend"].keys()):
-        method = 'all'
-        order = input_dict["detrend"]["all"]
 
-    elif "corners" in list(input_dict["detrend"].keys()):
-        method = 'corners'
-        order = input_dict["detrend"]["corners"]
-    else:
-        assert ("detrend key must be 'all', or 'corners'")
-    
-    assert order in [0, 1, 2], "detrend_order must be 0, 1, or 2"
+    for key, value in input_dict["detrend"].items():
+        assert key in ["all", "corners"], "detrend key must be 'all' or 'corners'"
+        assert value in [0, 1, 2], "detrend_order must be 0, 1, or 2"
+
+        method = key
+        order = value
 
     data_trend, _ = matutils.calculate_2D_trend(
             rxLoc, survey.dobs, order, method
@@ -822,7 +818,7 @@ if (inversion_style == "homogeneous_units") and not vector_property:
     mstart = np.asarray([np.median(mref[mref == unit]) for unit in units])
 
     # Collapse mstart and mref to the median unit values
-    mref = mstart.copy() #np.asarray([np.median(mref[units==unit]) for unit in units])
+    mref = mstart.copy()
 
     model_map = Maps.SurjectUnits(index)
     regularization_map = Maps.IdentityMap(nP=nC)
@@ -1134,7 +1130,7 @@ else:
 if input_dict["inversion_type"] == 'grav':
 
     Utils.io_utils.writeUBCgravityObservations(
-            outDir + 'Predicted_' + input_dict["inversion_type"] + '.dat', 
+            outDir + 'Predicted_' + input_dict["inversion_type"] + '.dat',
             survey, dpred+data_trend)
 
 elif input_dict["inversion_type"] in ['mvi', 'mvis', 'mag']:
@@ -1281,9 +1277,9 @@ if input_dict["inversion_type"] == 'mvis':
     print("Run Spherical inversion")
     mrec_S = inv.run(mstart)
 
-    print("Target Misfit: %.3e (%.0f data with chifact = %g)" % 
+    print("Target Misfit: %.3e (%.0f data with chifact = %g)" %
           (0.5*target_chi*len(survey.std), len(survey.std), target_chi))
-    print("Final Misfit:  %.3e" % 
+    print("Final Misfit:  %.3e" %
           (0.5 * np.sum(((survey.dobs - invProb.dpred)/survey.std)**2.)))
 
     if show_graphics:
@@ -1319,7 +1315,7 @@ if input_dict["inversion_type"] == 'mvis':
         twin.set_ylabel('$\phi_m$', size=16, rotation=0)
         t = fig.get_size_inches()
         fig.set_size_inches(t[0]*2, t[1]*2)
-        fig.savefig(outDir + 'Convergence_curve_spherical.png', 
+        fig.savefig(outDir + 'Convergence_curve_spherical.png',
                     bbox_inches='tight', dpi=600)
         plt.show(block=False)
 
