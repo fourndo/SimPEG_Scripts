@@ -747,7 +747,12 @@ def get_model(input_value, vector=vector_property):
                 model[:, -1] *= -1
             else:
                 model = input_mesh.readModelUBC(workDir + input_value)
-                model = np.c_[model, np.zeros((model.shape[0], 2))]
+                model = Utils.sdiag(model) * np.kron(
+                    Utils.matutils.dipazm_2_xyz(
+                        dip=survey.srcField.param[1],
+                        azm_N=survey.srcField.param[2]
+                    ), np.ones((input_mesh.nC, 1))
+                )
         # Transfer models from mesh to mesh
         if mesh != input_mesh:
             model = modelutils.transfer_to_mesh(input_mesh, mesh, model)
@@ -790,7 +795,7 @@ def get_model(input_value, vector=vector_property):
                     ], np.ones(mesh.nC)
                 )[0, :]
 
-    return model
+    return mkvc(model)
 
 
 mref = get_model(model_reference)
@@ -1095,7 +1100,6 @@ print("Target Misfit: %.3e (%.0f data with chifact = %g)" %
 print("Final Misfit:  %.3e" %
       (0.5 * np.sum(((survey.dobs - invProb.dpred)/survey.std)**2.)))
 
-breakpoint()
 if show_graphics:
     # Plot convergence curves
     fig, axs = plt.figure(), plt.subplot()
