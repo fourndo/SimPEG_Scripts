@@ -1286,6 +1286,13 @@ if input_dict["inversion_type"] == 'mvis':
     print("Final Misfit:  %.3e" %
           (0.5 * np.sum(((survey.dobs - invProb.dpred)/survey.std)**2.)))
 
+    xc = activeCellsMap * mrec_S
+    vec_xyz = Utils.matutils.atp2xyz(xc.reshape((-1, 3), order='F'))
+    Utils.io_utils.writeVectorUBC(
+        mesh,
+        save_model.fileName + '_l2.fld',
+        vec
+    )
     if show_graphics:
         # Plot convergence curves
         fig, axs = plt.figure(), plt.subplot()
