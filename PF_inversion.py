@@ -454,6 +454,11 @@ if "max_chunk_size" in list(input_dict.keys()):
 else:
     max_chunk_size = 128
 
+if "chunk_by_rows" in list(input_dict.keys()):
+    chunk_by_rows = input_dict["chunk_by_rows"]
+else:
+    chunk_by_rows = False
+
 if "tiled_inversion" in list(input_dict.keys()):
     tiled_inversion = input_dict["tiled_inversion"]
 else:
@@ -897,7 +902,7 @@ def createLocalProb(meshLocal, local_survey, global_weights, ind):
             Jpath=outDir + "Tile" + str(ind) + ".zarr",
             maxRAM=max_ram,
             n_cpu=n_cpu,
-            max_chunk_size=max_chunk_size
+            max_chunk_size=max_chunk_size, chunk_by_rows=chunk_by_rows
             )
 
     elif input_dict["inversion_type"] == 'mag':
@@ -907,7 +912,7 @@ def createLocalProb(meshLocal, local_survey, global_weights, ind):
             Jpath=outDir + "Tile" + str(ind) + ".zarr",
             maxRAM=max_ram,
             n_cpu=n_cpu,
-            max_chunk_size=max_chunk_size
+            max_chunk_size=max_chunk_size, chunk_by_rows=chunk_by_rows
             )
 
     elif input_dict["inversion_type"] in ['mvi', 'mvis']:
@@ -918,7 +923,7 @@ def createLocalProb(meshLocal, local_survey, global_weights, ind):
             maxRAM=max_ram,
             modelType='vector',
             n_cpu=n_cpu,
-            max_chunk_size=max_chunk_size
+            max_chunk_size=max_chunk_size, chunk_by_rows=chunk_by_rows
         )
 
     local_survey.pair(prob)
