@@ -153,6 +153,10 @@ if (
 
     survey.dobs -= data_trend
 
+    if survey.std is None and "new_uncert" in list(input_dict.keys()):
+        # In case uncertainty hasn't yet been set (e.g., geosoft grids)
+        survey.std = np.ones(survey.dobs.shape)
+
     if input_dict["data_type"] in ['ubc_mag']:
         Utils.io_utils.writeUBCmagneticsObservations(os.path.splitext(
             outDir + input_dict["data_file"])[0] + '_trend.mag',
@@ -403,7 +407,6 @@ else:
 
     lower_bound = -np.inf
 
-
 if "upper_bound" in list(input_dict.keys()):
     upper_bound = input_dict["upper_bound"]
 else:
@@ -430,6 +433,7 @@ if "depth_core" in list(input_dict.keys()):
             np.min([(xLoc.max()-xLoc.min()), (yLoc.max()-yLoc.min())]) *
             input_dict["depth_core"]["auto"]
         )
+        print("Mesh core depth = %.2f" % depth_core)
     else:
         depth_core = 0
 else:
