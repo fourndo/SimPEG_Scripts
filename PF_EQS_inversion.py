@@ -52,7 +52,8 @@ import geosoft.gxpy.grid_fft as gxfft
 
 ###############################################################################
 # EQS Setup
-def readGeosoftGrid(gridname, topo, survey_altitude, data_type, inducing_field_aid=None, padded=False, outDir=None, needs_shift=False):
+def readGeosoftGrid(gridname, topo, survey_altitude, data_type, inducing_field_aid=None,
+                    padded=False, outDir=None, needs_shift_X=False, needs_shift_Y=False):
 
     USE_MIN_CURVATURE = 0 # If 0 then use MAX_ENTROPY
     if padded:
@@ -78,7 +79,8 @@ def readGeosoftGrid(gridname, topo, survey_altitude, data_type, inducing_field_a
                 
         filenameParts = gxgrid.name_parts(gridname)
         outputGridName = os.path.join(outDir, filenameParts[2] + '_padded' + filenameParts[3] + filenameParts[4])      
-        newGrid = gxgrid.Grid.from_data_array(GsftGrid_values[:,:,3], file_name=outputGridName, overwrite=True, properties=GsftGrid_props)
+        newGrid = gxgrid.Grid.from_data_array(GsftGrid_values[:,:,3],
+                      file_name=outputGridName, overwrite=True, properties=GsftGrid_props)
         newGrid.close()
 
     else:
@@ -109,17 +111,24 @@ def readGeosoftGrid(gridname, topo, survey_altitude, data_type, inducing_field_a
     dx = GsftGrid_props.get('dx', None)
     print('  Cell size: %.3f' % dx)
     print('  x mod dx: %.3f' % (GsftGrid_values[0,0,0] % dx))
-    if padded and ~USE_MIN_CURVATURE and needs_shift:
-        # IMPORTANT: This shifts the padded grid half a cell to the east to compensate
-        # for the bug in Geosoft API 9.6 that shifts the grid to the west by half a cell:
+    print('  y mod dx: %.3f' % (GsftGrid_values[0,0,1] % dx))
+    if padded and ~USE_MIN_CURVATURE:
+        # IMPORTANT: This shifts the padded grid half a cell to the east or north to compensate
+        # for the bug in Geosoft API 9.6 that shifts the grid to the west or south by half a cell:
         # when using MAX ENTROPY fill. This should not be used if using MIN CURVATURE
-        print('  Grid shift applied')
-        newLocs[:,0] = newLocs[:,0] + (dx * 0.5)
+        if needs_shift_X:
+            print('  X Grid shift applied')
+            newLocs[:,0] = newLocs[:,0] + (dx * 0.5)
+        if needs_shift_Y:
+            print('  Y Grid shift applied')
+            newLocs[:,1] = newLocs[:,1] + (dx * 0.5)
     elif ~padded:
-        needs_shift = GsftGrid_values[0,0,0].squeeze() % dx == 0
-
-    max_distance = 2 * dx # Only used to minimize the extent of topo resampling for large problems
-#    max_distance = max([2 * GsftGrid_props.get('dx', None), 500]) # Only used to minimize the extent of topo resampling for large problems
+        needs_shift_X = GsftGrid_values[0,0,0].squeeze() % dx == 0
+        print(' Needs shift in X')
+        needs_shift_Y = GsftGrid_values[0,0,1].squeeze() % dx == 0
+        print(' Needs shift in Y')
+        
+    max_distance = 5 * dx # Only used to minimize the extent of topo resampling for large problems
 
     assert ((topo[:, 0].min() <= (newLocs[:,0].min() - max_distance)) or (topo[:, 0].max() >= (newLocs[:,0].max() + max_distance)) or
             (topo[:, 1].min() <= (newLocs[:,1].min() - max_distance)) or (topo[:, 1].max() >= (newLocs[:,1].max() + max_distance))), \
@@ -127,10 +136,9 @@ def readGeosoftGrid(gridname, topo, survey_altitude, data_type, inducing_field_a
  
     # Create forward obs elevations
     # Create new data locations draped at survey_altitude above topo
-#    ix = (topo[:, 0] >= (newLocs[:, 0].min() - max_distance)) & (topo[:, 0] <= (newLocs[:, 0].max() + max_distance)) & \
-#         (topo[:, 1] >= (newLocs[:, 1].min() - max_distance)) & (topo[:, 1] <= (newLocs[:, 1].max() + max_distance))
-#    F = LinearNDInterpolator(topo[ix, :2], topo[ix, 2] + survey_altitude)
-    F = NearestNDInterpolator(topo[:, :2], topo[:, 2] + survey_altitude)
+    ix = (topo[:, 0] >= (newLocs[:, 0].min() - max_distance)) & (topo[:, 0] <= (newLocs[:, 0].max() + max_distance)) & \
+         (topo[:, 1] >= (newLocs[:, 1].min() - max_distance)) & (topo[:, 1] <= (newLocs[:, 1].max() + max_distance))
+    F = LinearNDInterpolator(topo[ix, :2], topo[ix, 2] + survey_altitude)
 
     newLocs[:,2] = F(newLocs[:,:2])
     assert ~any(np.isnan(newLocs[:,2])), "Topography interpolation for grid failed"
@@ -149,7 +157,7 @@ def readGeosoftGrid(gridname, topo, survey_altitude, data_type, inducing_field_a
         survey = PF.BaseGrav.LinearSurvey(srcField)
         survey.dobs = -newLocs[:,3]
         
-    return survey, GsftGrid_values, GsftGrid_mask, GsftGrid_props, needs_shift
+    return survey, GsftGrid_values, GsftGrid_mask, GsftGrid_props, needs_shift_X, needs_shift_Y
 
 geosoft_enabled = False
 geosoft_output = False
@@ -291,9 +299,14 @@ elif geosoft_enabled and input_dict["data_type"] in ['geosoft_mag', 'geosoft_gra
     
     geosoft_input = True
     geosoft_output = True
-    out_survey, out_GsftGrid_values, out_GsftGrid_mask, out_GsftGrid_props, needs_shift = readGeosoftGrid(input_dict["data_file"], topo, survey_altitude, input_dict["data_type"], inducing_field_aid, padded=False)
+    out_survey, out_GsftGrid_values, out_GsftGrid_mask, out_GsftGrid_props, needs_shift_X, needs_shift_Y = readGeosoftGrid(
+                input_dict["data_file"], topo, survey_altitude,
+                input_dict["data_type"], inducing_field_aid, padded=False)
     if add_data_padding:
-        survey, GsftGrid_values, GsftGrid_mask, GsftGrid_props, _ = readGeosoftGrid(input_dict["data_file"], topo, survey_altitude, input_dict["data_type"], inducing_field_aid, padded=True, outDir=outDir, needs_shift=needs_shift)
+        survey, GsftGrid_values, GsftGrid_mask, GsftGrid_props, _, _ = readGeosoftGrid(
+                input_dict["data_file"], topo, survey_altitude,
+                input_dict["data_type"], inducing_field_aid, padded=True,
+                outDir=outDir, needs_shift_X=needs_shift_X, needs_shift_Y=needs_shift_Y)
 
 #        fig, ax1 = plt.figure(), plt.subplot()
 #        plt.plot(out_survey.rxLoc[:,0], out_survey.rxLoc[:,1], 'bo', markersize=1)
