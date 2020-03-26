@@ -57,11 +57,11 @@ Optional settings: type = DEFAULT
         - ``voxel``: Standard voxel base inversion [DEFAULT]
         - ``homogeneous_units``: Invert for best-fitting value for each domain defined by the unique values found in ``model_start``.
 * ``lower_bound``: float = -Inf
-    Value to use for upper bound in each cell
+    Value to use for lower bound in each cell
 * ``max_chunk_size``: float = 128
         Size of data chunks to store in memory
 * ``max_RAM``: float = 4
-        Maximum available RAM. If ``tiled_inversion`` is True, then the tile size will be define to keep the problem smaller than ``max_RAM``
+        Maximum available RAM. If ``tiled_inversion`` is True, then the tile size will be defined to keep the problem smaller than ``max_RAM``
 * ``model_start``: str or float or list[float] = 0
     Starting model to be loaded with the ``input_mesh``
         - str = ``filename``: Load starting model from file. If ``inversion_mesh_type`` differs from the ``input_mesh_file``, the model values are interpolated to the new mesh.
