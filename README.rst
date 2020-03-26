@@ -30,6 +30,11 @@ Optional settings: type = DEFAULT
     Alpha weights used to scale the regularization functions.
         - Scalar (density, susceptibility): Requires 4 values for [a_s, a_x, a_y, a_z]
         - Vector (mvi): Requires 12 values for [a_s, a_x, a_y, a_z, t_s, t_x, t_y, t_z, p_s, p_x, p_y, p_z]
+* ``alphas_mvis``: list = [1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1]
+    Alpha weights used to scale the regularization functions only used for mvis inversions.
+        - Vector (mvi): Requires 12 values for [a_s, a_x, a_y, a_z, t_s, t_x, t_y, t_z, p_s, p_x, p_y, p_z]
+* ``chunk_by_rows``: bool = False
+        Alternate memory management mode that can be faster for very large sensitivity or forward calculations 
 * ``depth_core``: dict: {str, float} = {"method": value}
     Thickness of core region defined by ``method``:
         - ``value``: Set ``value`` in meters
@@ -46,13 +51,17 @@ Optional settings: type = DEFAULT
 * ``input_mesh_file``: str = None
     Mesh file in UBC format used to load the ``model_reference`` and ``model_start``. The same mesh is used for the inversion if ``inversion_mesh_type`` is same type.
 * ``inversion_mesh_type``: str = "tree"
-    Type of mesh to be used in the inversion. If type differs from the ``input_mesh_file``, then the input ``model_reference`` and ``model_start`` are trasnfered over using a NearestNeighbour interpolation.
+    Type of mesh to be used in the inversion. If type differs from the ``input_mesh_file``, then the input ``model_reference`` and ``model_start`` are transfered over using a NearestNeighbour interpolation.
 * ``inversion_style``: str
     Inversion style chosen from:
         - ``voxel``: Standard voxel base inversion [DEFAULT]
         - ``homogeneous_units``: Invert for best-fitting value for each domain defined by the unique values found in ``model_start``.
+* ``lower_bound``: float = -Inf
+    Value to use for upper bound in each cell
 * ``max_chunk_size``: float = 128
         Size of data chunks to store in memory
+* ``max_RAM``: float = 4
+        Maximum available RAM. If ``tiled_inversion`` is True, then the tile size will be define to keep the problem smaller than ``max_RAM``
 * ``model_start``: str or float or list[float] = 0
     Starting model to be loaded with the ``input_mesh``
         - str = ``filename``: Load starting model from file. If ``inversion_mesh_type`` differs from the ``input_mesh_file``, the model values are interpolated to the new mesh.
@@ -66,8 +75,8 @@ Optional settings: type = DEFAULT
         - list = [value, value, value]: Start property model values for vector model [1e-4, 1e-4, 1e-4]
                  If scalar input used for vector model, assume scalar amplitude in inducing field direction.
 * ``new_uncert``: list = [0, 1]
-    List of values to be used for uncertainties set as [%, floor] where
-    uncertainty = % * |data| + floor
+    List of values to be used for uncertainties set as [%, floor] (% from 0-1) where
+    uncertainty = max(% * |data|, floor)
 * ``no_data_value``: float = -100
     Value to use for no-data-value
 * ``parallelized``: bool = True,
@@ -78,6 +87,10 @@ Optional settings: type = DEFAULT
     Show graphic plots
 * ``target_chi``: float = 1
     Target chi factor
+* ``tiled_inversion``: bool = True,
+    Use tiles to speed up the inversion and keep the problem small
+* ``upper_bound``: float = Inf
+    Value to use for upper bound in each cell
 
 
 
@@ -87,7 +100,7 @@ Magnetic only
 * "inducing_field_aid": [TOTAL FIELD, DIP, AZIMUTH], New inducing field as floats
 
 
-More documentation to come in 2019!!
+More documentation to come in 2020!!
 Stay tunes.
 
 
