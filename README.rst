@@ -62,7 +62,11 @@ Optional settings: type = DEFAULT
         Size of data chunks to store in memory
 * ``max_RAM``: float = 4
         Maximum available RAM. If ``tiled_inversion`` is True, then the tile size will be defined to keep the problem smaller than ``max_RAM``
-* ``model_start``: str or float or list[float] = 0
+* ``model_norms``: list = [2, 2, 2, 2]
+    Model norms to apply, in range of 0-2 where 2 is least-squares
+        - Scalar (density, susceptibility): Requires 4 values for [Lp_s, Lp_x, Lp_y, Lp_z]
+        - Vector (mvi): Requires 12 values for [Lp_s, Lp_x, Lp_y, Lp_z, t_s, t_x, t_y, t_z, p_s, p_x, p_y, p_z]
+* ``model_start``: str or float or list[float] = 1e-4
     Starting model to be loaded with the ``input_mesh``
         - str = ``filename``: Load starting model from file. If ``inversion_mesh_type`` differs from the ``input_mesh_file``, the model values are interpolated to the new mesh.
         - float = value: Start property, scalar [1e-4].
