@@ -1800,8 +1800,9 @@ if input_dict["inversion_type"] == 'mvis':
     Utils.io_utils.writeVectorUBC(
         mesh,
         save_model.fileName + '_l2.fld',
-        vec
+        vec_xyz
     )
+    
     if show_graphics:
         plot_convergence_curves(survey.std, inversion_output, target_chi, outDir, IRLS)
         
