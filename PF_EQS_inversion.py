@@ -196,9 +196,9 @@ def convert_geosoft_gridfile(gridname, topo, survey_altitude,
         if needs_shift_x:
             print('  X grid shift applied')
             new_locs[:, 0] = new_locs[:, 0] + (dx * 0.5)
-#        if needs_shift_y:
-#            print('  Y grid shift applied')
-#            new_locs[:, 1] = new_locs[:, 1] + (dx * 0.5)
+        if needs_shift_y:
+            print('  Y grid shift applied')
+            new_locs[:, 1] = new_locs[:, 1] + (dx * 0.5)
     elif ~padded:
         # Test of the core grid looks like it might need shifting
         GsftGrid.needs_shift_x = GsftGrid.values[:, :, 0].min() % dx == 0
