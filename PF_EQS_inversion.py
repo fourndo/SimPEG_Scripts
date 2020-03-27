@@ -16,10 +16,11 @@ See README for description of options
 
 """
 import os
-import json
-import dask
-import multiprocessing
 import sys
+import json
+import time
+import multiprocessing
+import dask
 import numpy as np
 import matplotlib.pyplot as plt
 from SimPEG import (
@@ -27,13 +28,12 @@ from SimPEG import (
     DataMisfit, Inversion, InvProblem, Directives, Optimization,
     )
 from SimPEG.Utils import mkvc, matutils, modelutils
-import SimPEG.PF as PF
 from discretize.utils import meshutils
 from scipy.interpolate import NearestNDInterpolator, LinearNDInterpolator
-from scipy.spatial import cKDTree
-import time
-import geosoft.gxpy.grid as gxgrid
+from scipy.spatial.ckdtree import cKDTree
+import SimPEG.PF as PF
 import geosoft.gxpy.gx as gx
+import geosoft.gxpy.grid as gxgrid
 import geosoft.gxpy.grid_fft as gxfft
 
 # NEED TO ADD ALPHA VALUES
@@ -446,7 +446,7 @@ input_file = sys.argv[1]
 
 if input_file is not None:
     workDir = dsep.join(
-                os.path.dirname(os.path.abspath(input_file)).split(dsep)
+            os.path.dirname(os.path.abspath(input_file)).split(dsep)
             )
     if len(workDir) > 0:
         workDir += dsep
@@ -464,7 +464,7 @@ with open(input_file, 'r') as f:
     driver = json.load(f)
 
 input_dict = {k.lower() if isinstance(k, str) else k:
-              v.lower() if isinstance(v, str) else v for k,v in driver.items()}
+              v.lower() if isinstance(v, str) else v for k, v in driver.items()}
 
 assert "inversion_type" in list(input_dict.keys()), (
     "Require 'inversion_type' to be set: 'grav', 'mag', 'mvi', or 'mvis'"
@@ -616,8 +616,7 @@ if ("detrend" in list(input_dict.keys()) and
         order = value
 
     data_trend, _ = matutils.calculate_2D_trend(
-            rxLoc, survey.dobs, order, method
-            )
+        rxLoc, survey.dobs, order, method)
 
     survey.dobs -= data_trend
 
@@ -626,23 +625,23 @@ if ("detrend" in list(input_dict.keys()) and
         survey.std = np.ones(survey.dobs.shape)
 
     if input_dict["data_type"] in ['ubc_mag', 'geosoft_mag']:
-        Utils.io_utils.writeUBCmagneticsObservations(os.path.splitext(
-            outDir + input_dict["data_file"])[0] + '_trend.mag',
-            survey, data_trend
-        )
-        Utils.io_utils.writeUBCmagneticsObservations(os.path.splitext(
-            outDir + input_dict["data_file"])[0] + '_detrend.mag',
-            survey, survey.dobs
-        )
+        Utils.io_utils.writeUBCmagneticsObservations(
+            os.path.splitext(
+                    outDir + input_dict["data_file"])[0] + '_trend.mag',
+                    survey, data_trend)
+        Utils.io_utils.writeUBCmagneticsObservations(
+            os.path.splitext(
+                    outDir + input_dict["data_file"])[0] + '_detrend.mag',
+                    survey, survey.dobs)
     else:
-        Utils.io_utils.writeUBCgravityObservations(os.path.splitext(
-            outDir + input_dict["data_file"])[0] + '_trend.mag',
-            survey, data_trend
-        )
-        Utils.io_utils.writeUBCgravityObservations(os.path.splitext(
-            outDir + input_dict["data_file"])[0] + '_detrend.mag',
-            survey, survey.dobs
-        )
+        Utils.io_utils.writeUBCgravityObservations(
+            os.path.splitext(
+                    outDir + input_dict["data_file"])[0] + '_trend.mag',
+                    survey, data_trend)
+        Utils.io_utils.writeUBCgravityObservations(
+            os.path.splitext(
+                    outDir + input_dict["data_file"])[0] + '_detrend.mag',
+                    survey, survey.dobs)
 
 else:
     data_trend = 0.0
@@ -655,8 +654,7 @@ if (
     new_uncert = input_dict["new_uncert"]
     if new_uncert:
         assert (len(new_uncert) == 2 and all(np.asarray(new_uncert) >= 0)), (
-            "New uncertainty requires pct fraction (0-1) and floor."
-        )
+                "New uncertainty requires pct fraction (0-1) and floor.")
         survey.std = np.maximum(abs(new_uncert[0]*survey.dobs), new_uncert[1])
 
 if survey.std is None:
@@ -878,13 +876,11 @@ else:
 if "lower_bound" in list(input_dict.keys()):
     lower_bound = input_dict["lower_bound"]
 else:
-
     lower_bound = -np.inf
 
 if "upper_bound" in list(input_dict.keys()):
     upper_bound = input_dict["upper_bound"]
 else:
-
     upper_bound = np.inf
 
 # @Nick: Not sure we want to keep this, not so transparent
@@ -1014,7 +1010,6 @@ topo_elevations_at_data_locs = np.c_[
     topo_interp_function(rxLoc[:, :2])
 ]
 
-
 def createLocalMesh(rxLoc, ind_t):
     """
     Function to generate a mesh based on receiver locations
@@ -1095,11 +1090,14 @@ if tiled_inversion:
         print("Tiling:" + str(count))
 
         if rxLoc.shape[0] > 40000:
-            # Default clustering algorithm goes slow on large data files, so switch to simple method
-            tiles, binCount, tileIDs, tile_numbers = Utils.modelutils.tileSurveyPoints(rxLoc, count, method=None)
+            # Default clustering algorithm goes slow on large data files,
+            # so switch to simple method
+            tiles, binCount, tileIDs, tile_numbers = \
+                Utils.modelutils.tileSurveyPoints(rxLoc, count, method=None)
         else:
             # Use clustering
-            tiles, binCount, tileIDs, tile_numbers = Utils.modelutils.tileSurveyPoints(rxLoc, count)
+            tiles, binCount, tileIDs, tile_numbers = \
+                Utils.modelutils.tileSurveyPoints(rxLoc, count)
 
         # Grab the smallest bin and generate a temporary mesh
         indMax = np.argmax(binCount)
@@ -1228,9 +1226,9 @@ activeCells = Utils.surface2ind_topo(mesh, topo)
 
 if isinstance(mesh, Mesh.TreeMesh):
     Mesh.TreeMesh.writeUBC(
-          mesh, outDir + 'OctreeMeshGlobal.msh',
-          models={outDir + 'ActiveSurface.act': activeCells}
-        )
+            mesh, outDir + 'OctreeMeshGlobal.msh',
+            models={outDir + 'ActiveSurface.act': activeCells}
+            )
 else:
     mesh.writeModelUBC(
           'ActiveSurface.act', activeCells
@@ -1335,7 +1333,7 @@ if (inversion_style == "homogeneous_units") and not vector_property:
     # Build list of indecies for the geounits
     index = []
     for unit in units:
-        index.append(mstart==unit)
+        index.append(mstart == unit)
     nC = len(index)
 
     # Collapse mstart and mref to the median reference values
@@ -1478,7 +1476,9 @@ if tiled_inversion:
 
         print("Tile " + str(ind+1) + " of " + str(X1.shape[0]))
 
-        local_misfit, global_weights = createLocalProb(local_mesh, local_survey, global_weights, ind)
+        local_misfit, global_weights = createLocalProb(local_mesh,
+                                                       local_survey,
+                                                       global_weights, ind)
 
         # Add the problems to a Combo Objective function
         if ind == 0:
@@ -1498,7 +1498,8 @@ global_weights = (global_weights/np.max(global_weights))
 if isinstance(mesh, Mesh.TreeMesh):
     Mesh.TreeMesh.writeUBC(
               mesh, outDir + 'OctreeMeshGlobal.msh',
-              models={outDir + 'SensWeights.mod': (activeCellsMap*model_map*global_weights)[:mesh.nC]}
+              models={outDir + 'SensWeights.mod': \
+                      (activeCellsMap*model_map*global_weights)[:mesh.nC]}
             )
 else:
     mesh.writeModelUBC(
@@ -1658,7 +1659,7 @@ if input_dict["inversion_type"] == 'mvis':
         max_irls_iterations = input_dict["max_irls_iterations"]
         assert max_irls_iterations >= 0, "Max IRLS iterations must be >= 0"
     else:
-        if np.all(model_norms==2):
+        if np.all(model_norms == 2):
             # Cartesian or not sparse
             max_irls_iterations = 0
 
@@ -1838,23 +1839,23 @@ if "forward" in list(input_dict.keys()):
         y = mkvc(y)[dists < input_dict["forward"][4]]
 
         z = topo_interp_function(mkvc(x), mkvc(y)) + input_dict["forward"][3]
-        newLocs = np.c_[mkvc(x), mkvc(y), mkvc(z)]
+        new_locs = np.c_[mkvc(x), mkvc(y), mkvc(z)]
 
     elif input_dict["forward"][0] == "upwardcontinuation":
-        newLocs = rxLoc.copy()
-        newLocs[:, 2] += input_dict["forward"][1]
+        new_locs = rxLoc.copy()
+        new_locs[:, 2] += input_dict["forward"][1]
 
     if input_dict["inversion_type"] == 'grav':
-        rxLoc = PF.BaseGrav.RxObs(newLocs)
+        rxLoc = PF.BaseGrav.RxObs(new_locs)
         srcField = PF.BaseGrav.SrcField([rxLoc])
         forward = PF.BaseGrav.LinearSurvey(srcField)
 
     elif input_dict["inversion_type"] in ['mvi', 'mvis', 'mag']:
-        rxLoc = PF.BaseMag.RxObs(newLocs)
+        rxLoc = PF.BaseMag.RxObs(new_locs)
         srcField = PF.BaseMag.SrcField([rxLoc], param=survey.srcField.param)
         forward = PF.BaseMag.LinearSurvey(srcField)
 
-    forward.std = np.ones(newLocs.shape[0])
+    forward.std = np.ones(new_locs.shape[0])
 
     activeGlobal = (activeCellsMap * invProb.model) != no_data_value
     idenMap = Maps.IdentityMap(nP=int(activeGlobal.sum()))
@@ -1886,17 +1887,17 @@ if eqs_mvi:
     # MAG ONLY RTP Amplitude
     print("Run RTP forward model")
     # Add a constant height to the existing locations for upward continuation
-    newLocs = out_survey.srcField.rxList[0].locs
-    newLocs[:, 2] += upward_continue
+    new_locs = original_survey.srcField.rxList[0].locs
+    new_locs[:, 2] += upward_continue
 
     # Mag only
-    rxLocNew = PF.BaseMag.RxObs(newLocs)
+    rxLocNew = PF.BaseMag.RxObs(new_locs)
     # retain TF, but update inc-dec to vertical field
-    srcField = PF.BaseMag.SrcField([rxLocNew], param=[survey.srcField.param[0],90,0])
+    srcField = PF.BaseMag.SrcField([rxLocNew], param=[survey.srcField.param[0], 90, 0])
     forward = PF.BaseMag.LinearSurvey(srcField, components=['tmi'])
 
     # Set unity standard deviations (required but not used)
-    forward.std = np.ones(newLocs.shape[0])
+    forward.std = np.ones(new_locs.shape[0])
 
     if input_dict["inversion_type"] in ['mvi']:
         # Model lp out MVI_C
@@ -1906,7 +1907,7 @@ if eqs_mvi:
         vec_xyz = Utils.matutils.atp2xyz(
             mrec_S.reshape((nC, 3), order='F')).reshape((nC, 3), order='F')
 
-    # RTP forward
+    # Compute Amplitude model RTP
     amp = (vec_xyz[:, 0]**2. + vec_xyz[:, 1]**2 + vec_xyz[:, 2]**2)**0.5
 
     # Create active map to go from reduce set to full
@@ -1932,13 +1933,13 @@ if eqs_mvi:
         original_GsftGrid.write_gridfile(pred, output_grid_name)
 
     forward.unpair()
-    forward = PF.BaseMag.LinearSurvey(srcField, components=['bx','by','bz'])
-        # Set unity standard deviations (required but not used)
-    forward.std = np.ones(newLocs.shape[0])
+    forward = PF.BaseMag.LinearSurvey(srcField, components=['bx', 'by', 'bz'])
+    # Set unity standard deviations (required but not used)
+    forward.std = np.ones(new_locs.shape[0])
 
-    # MAG ONLY RTP Amplitude
+    # Compute Vector model RTP Amplitude
     print("Run Vector forward model")
-    
+
     idenMap = Maps.IdentityMap(nP=3*int(activeGlobal.sum()))
     start_time = time.time()
 
@@ -1947,18 +1948,18 @@ if eqs_mvi:
             mesh, chiMap=idenMap, actInd=activeGlobal, parallelized=parallelized,
             forwardOnly=True, modelType='vector'
             )
-    
+
         forward.pair(fwrProb)
         pred = fwrProb.fields(mrec)
     else:
         fwrProb = PF.Magnetics.MagneticIntegral(
             mesh, chiMap=idenMap, actInd=activeGlobal, parallelized=parallelized,
-            forwardOnly=True, coordinate_system = 'spherical', modelType='vector'
+            forwardOnly=True, coordinate_system='spherical', modelType='vector'
             )
-    
+
         forward.pair(fwrProb)
         pred = fwrProb.fields(mrec_S)
-        
+
     elapsed_time = time.time() - start_time
     print('Time: {0:.3f} sec'.format(elapsed_time))
 
