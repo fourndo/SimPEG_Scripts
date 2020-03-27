@@ -26,6 +26,9 @@ Parameters
 Optional settings: type = DEFAULT
 ---------------------------------
 
+* ``add_data_padding``: bool = False
+    Add an area of data padding around the input survey to manage edge effects
+	*Currently only enabled for Geosoft grid imports*
 * ``alphas``: list = [1, 1, 1, 1]
     Alpha weights used to scale the regularization functions.
         - Scalar (density, susceptibility): Requires 4 values for [a_s, a_x, a_y, a_z]
@@ -34,11 +37,14 @@ Optional settings: type = DEFAULT
     Alpha weights used to scale the regularization functions only used for mvis inversions.
         - Vector (mvi): Requires 12 values for [a_s, a_x, a_y, a_z, t_s, t_x, t_y, t_z, p_s, p_x, p_y, p_z]
 * ``chunk_by_rows``: bool = False
-        Alternate memory management mode that can be faster for very large sensitivity or forward calculations 
+    Alternate memory management mode that can be faster for very large sensitivity or forward calculations 
 * ``depth_core``: dict: {str, float} = {"method": value}
     Thickness of core region defined by ``method``:
         - ``value``: Set ``value`` in meters
         - ``auto``: Compute mesh depth as: ``value`` * survey width.
+* ``decimate_to_mesh``: bool = False
+    Downsample the input data to at most 1 observation above each grid cell. This significantly reduces the problem size when using padding, as well as when ``core_cell_size`` is larger than the data spacing.
+	*Currently only enabled for OcTree meshes*
 * ``detrend``: dict {str: int} = None
     Remove trend from the data {method: order}.
         ``method``
