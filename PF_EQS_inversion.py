@@ -13,7 +13,6 @@ Potential field inversion
 Run an inversion from input parameters stored in a json file.
 See README for description of options
 
-
 """
 import os
 import sys
@@ -23,32 +22,18 @@ import multiprocessing
 import dask
 import numpy as np
 import matplotlib.pyplot as plt
+from discretize.utils import meshutils
+from scipy.interpolate import NearestNDInterpolator, LinearNDInterpolator
+from scipy.spatial.ckdtree import cKDTree
+import geosoft.gxpy.gx as gx
+import geosoft.gxpy.grid as gxgrid
+import geosoft.gxpy.grid_fft as gxfft
+import SimPEG.PF as PF
 from SimPEG import (
     Mesh, Utils, Maps, Regularization,
     DataMisfit, Inversion, InvProblem, Directives, Optimization,
     )
 from SimPEG.Utils import mkvc, matutils, modelutils
-from discretize.utils import meshutils
-from scipy.interpolate import NearestNDInterpolator, LinearNDInterpolator
-from scipy.spatial.ckdtree import cKDTree
-import SimPEG.PF as PF
-import geosoft.gxpy.gx as gx
-import geosoft.gxpy.grid as gxgrid
-import geosoft.gxpy.grid_fft as gxfft
-
-# NEED TO ADD ALPHA VALUES
-# NEED TO ADD REFERENCE
-# NEED TO ADD STARTING
-
-###
-#I would use the containing_cell call
-#for octree
-#it's really fast since in C
-#than loop on unique cells and do whatever calc to pull the value that you want
-#you can even do it on a 2D octree
-#using the same refine parameters
-#that should do the trick
-###
 
 ###############################################################################
 # EQS Setup
@@ -147,8 +132,10 @@ class GeosoftGrid:
                                                properties=self.properties)
         new_grid.close()
 
-def get_geosoft_inputs(out_dir, inducing_field_aid, add_data_padding, 
+def get_geosoft_inputs(out_dir, inducing_field_aid, add_data_padding,
                        input_dict, topo, survey_altitude):
+    """Process the Geosoft input files to create grids and surveys"""
+
     assert inducing_field_aid is not None, \
         "Geosoft input needs requires 'inducing_field_aid' entry"
     assert "new_uncert" in list(input_dict.keys()), \
@@ -263,15 +250,15 @@ def convert_geosoft_gridfile(gridname, topo, survey_altitude,
 
 def decimate_survey_to_mesh(dec_mesh, data_trend, in_survey, full_survey=None):
     """Load a Geosoft grid and convert it to a Simpeg PF survey object
-    
+
     Keyword arguments:
     dec_mesh -- A mesh to downsample against - usually a QuadTree based on the core data.
     data_trend -- the specific data_trend which will also need decimating
     in_survey -- The survey to be decimated. This may or may not be padded
-    full_survey -- (optional). If only the data padding is to be decimated, 
+    full_survey -- (optional). If only the data padding is to be decimated,
         then this contain the full padded survey and only points within this
         survey that are not in 'in_survey' will be decimated.
-    
+
     """
     padded_survey_locs = in_survey.rxLoc[:, :2]
     if full_survey:
@@ -390,10 +377,10 @@ def decimate_survey_to_mesh(dec_mesh, data_trend, in_survey, full_survey=None):
 
     in_survey_ds.dobs = obs_new
     in_survey_ds.std = std_new
-    
+
     if not np.isscalar(data_trend):
         data_trend = data_trend[pad_points_kept2]
-    
+
     print("  %.0f data points retained (%.1f%%)" %
           (len(in_survey_ds.dobs),
            100 * len(in_survey_ds.dobs) / len(padded_survey_locs)))
@@ -401,6 +388,8 @@ def decimate_survey_to_mesh(dec_mesh, data_trend, in_survey, full_survey=None):
     return in_survey_ds, data_trend
 
 def plot_convergence_curves(uncert, inversion_output, target_chi, out_dir, IRLS=None):
+    """Plot inversion convergence curves, including IRLS information where available"""
+
     fig, axs = plt.figure(), plt.subplot()
     axs.plot(inversion_output.phi_d, 'ko-', lw=2)
     phi_d_target = 0.5*target_chi*len(uncert)
@@ -440,7 +429,7 @@ def plot_convergence_curves(uncert, inversion_output, target_chi, out_dir, IRLS=
     fig.savefig(out_dir + 'Convergence_curve' + filename_suffix + '.png',
                 bbox_inches='tight', dpi=300)
     plt.show(block=False)
-    
+
 dsep = os.path.sep
 input_file = sys.argv[1]
 
@@ -503,9 +492,10 @@ if input_dict["data_type"] in ['geosoft_mag', 'geosoft_grav']:
 
 if "eqs_mvi" in list(input_dict.keys()):
     eqs_mvi = input_dict["eqs_mvi"]
-    
-    assert (input_dict["inversion_type"] in ['mvi', 'mvis']), \
-        "'eqs_mvi' requires an MVI inversion"
+
+    if eqs_mvi:
+        assert (input_dict["inversion_type"] in ['mvi', 'mvis']), \
+            "'eqs_mvi' requires an MVI inversion"
 
 else:
     eqs_mvi = False
@@ -545,7 +535,7 @@ else:
 if "add_data_padding" in list(input_dict.keys()):
     add_data_padding = input_dict["add_data_padding"]
 
-    assert (geosoft_enabled and 
+    assert (geosoft_enabled and
             input_dict["data_type"] in ['geosoft_mag', 'geosoft_grav']), \
         "'add_data_padding' is currently only enabled for Geosoft Grid imports"
 else:
@@ -605,8 +595,7 @@ rxLoc = survey.srcField.rxList[0].locs
 
 # 0-level the data if required, data_trend = 0 level
 if ("detrend" in list(input_dict.keys()) and
-        input_dict["data_type"] in ['ubc_mag', 'ubc_grav', 'geosoft_grav', 'geosoft_mag']
-):
+        input_dict["data_type"] in ['ubc_mag', 'ubc_grav', 'geosoft_grav', 'geosoft_mag']):
 
     for key, value in input_dict["detrend"].items():
         assert key in ["all", "corners"], "detrend key must be 'all' or 'corners'"
@@ -1802,10 +1791,10 @@ if input_dict["inversion_type"] == 'mvis':
         save_model.fileName + '_l2.fld',
         vec_xyz
     )
-    
+
     if show_graphics:
         plot_convergence_curves(survey.std, inversion_output, target_chi, outDir, IRLS)
-        
+
     if getattr(global_misfit, 'objfcts', None) is not None:
         dpred = np.zeros(survey.nD)
         for ind, dmis in enumerate(global_misfit.objfcts):
