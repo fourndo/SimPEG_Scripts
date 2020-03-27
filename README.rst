@@ -15,7 +15,7 @@ Parameters
      - ``ubc_grav``: See `GRAV3D documentation <https://grav3d.readthedocs.io/en/latest/content/files/obs.html#observations-file>`_
      - ``ubc_mag``: See `MAG3D documentation <https://mag3d.readthedocs.io/en/latest/content/files/obs.html#observations-file>`_
 * ``inversion_type``: str
-    Inversion typ
+    Inversion type
         - 'grav': Invert for density in (g/cc).
         - 'mag': Invert for magnetic susceptibility in (SI).
         - 'mvi': Invert for effective susceptibility in Cartesian coordinates.

@@ -16,28 +16,211 @@ See README for description of options
 
 """
 import os
-import json
-import dask
-import multiprocessing
 import sys
+import json
+import time
+import multiprocessing
+import dask
 import numpy as np
 import matplotlib.pyplot as plt
+from discretize.utils import meshutils
+from scipy.interpolate import NearestNDInterpolator, LinearNDInterpolator
+from scipy.spatial.ckdtree import cKDTree
+import SimPEG.PF as PF
 from SimPEG import (
     Mesh, Utils, Maps, Regularization,
     DataMisfit, Inversion, InvProblem, Directives, Optimization,
     )
 from SimPEG.Utils import mkvc, matutils, modelutils
-import SimPEG.PF as PF
-from discretize.utils import meshutils
-from scipy.interpolate import NearestNDInterpolator, LinearNDInterpolator
-from scipy.spatial import cKDTree
+
+def decimate_survey_to_mesh(dec_mesh, data_trend, in_survey, full_survey=None):
+    """Load a Geosoft grid and convert it to a Simpeg PF survey object
+
+    Keyword arguments:
+    dec_mesh -- A mesh to downsample against - usually a QuadTree based on the core data.
+    data_trend -- the specific data_trend which will also need decimating
+    in_survey -- The survey to be decimated. This may or may not be padded
+    full_survey -- (optional). If only the data padding is to be decimated,
+        then this contain the full padded survey and only points within this
+        survey that are not in 'in_survey' will be decimated.
+
+    """
+    padded_survey_locs = in_survey.rxLoc[:, :2]
+    if full_survey:
+        core_survey_locs = full_survey.rxLoc[:, :2]
+
+        # Identify which data points in the padded grid are actually padding
+        data_tree = cKDTree(core_survey_locs)
+        d, _ = data_tree.query(padded_survey_locs)
+        # Find all padding points that are not in core_survey_locs:
+        # they have distance > 0
+        is_padding = d > 0.1
+        is_padding_idx = np.where(is_padding)[0]
+
+        print("  %.0f core data points (%.1f%%)" %
+              (len(core_survey_locs),
+               100 * len(core_survey_locs) / len(padded_survey_locs)))
+        print("  %.0f padding points (%.1f%%)" %
+              (sum(is_padding), 100 * sum(is_padding) / len(padded_survey_locs)))
+    else:
+        is_padding = np.full(in_survey.dobs.shape, True, dtype='bool')
+        is_padding_idx = np.where(is_padding)[0]
+
+    print("  %.0f total points" % len(padded_survey_locs))
+
+    if full_survey and sum(is_padding) >= len(padded_survey_locs):
+
+        fig, (ax1, ax2) = plt.subplots(1, 2)
+        ax1.plot(core_survey_locs[:, 0], core_survey_locs[:, 1],
+                 'b+', markersize=1)
+        ax1.plot(padded_survey_locs[:, 0], padded_survey_locs[:, 1],
+                 'rx', markersize=1)
+        ax1.set_aspect('equal')
+        ax1.title.set_text('Max Entropy Padding')
+        ax1.title.set_fontsize(20)
+        ax1.legend(['Original', 'Padded'], loc=1, fontsize=20)
+
+        ax2.plot(core_survey_locs[:, 0], core_survey_locs[:, 1],
+                 'b+', markersize=10)
+        ax2.plot(padded_survey_locs[:, 0], padded_survey_locs[:, 1],
+                 'rx', markersize=10)
+        ax2.set_aspect('equal')
+        xr = np.percentile(core_survey_locs[:, 0], [0, 10])
+        yr = np.percentile(core_survey_locs[:, 1], [0, 10])
+        ax2.set_xlim(xr[0] - (np.diff(xr)), xr[1] + (np.diff(xr)))
+        ax2.set_ylim(yr[0] - (np.diff(yr)), yr[1] + (np.diff(yr)))
+        ax2.title.set_text('Max Entropy Padding (ZOOM)')
+        ax2.title.set_fontsize(20)
+        ax2.legend(['Original', 'Padded'], loc=1, fontsize=20)
+
+        t = fig.get_size_inches()
+        fig.set_size_inches(t[0]*5, t[1]*5)
+
+        plt.show(block=False)
+
+        assert(sum(is_padding) < len(padded_survey_locs)), \
+        "Padding detection failed: Geosoft grid may have been shifted"
+
+    # Get list of cell indices that contains each data point
+    padding_data = in_survey.rxLoc[is_padding, :3]
+    padding_obs = in_survey.dobs[is_padding]
+    padding_std = in_survey.std[is_padding]
+    # Get all cells that contain a padding data point
+    c = dec_mesh.point2index(padding_data[:, :2])
+    # Find unique cell indexes
+    unique_cells = np.unique(c)
+    # Get the center of each cell
+    cell_centers = dec_mesh.gridCC[unique_cells]
+
+    # Build a new data object to store the downsampled data
+    rx_loc_new = np.nan*np.ones_like(in_survey.rxLoc)
+    obs_new = np.nan*np.ones_like(in_survey.dobs)
+    std_new = np.nan*np.ones_like(in_survey.std)
+    # Track which data points are kept
+    pad_points_kept = -1 * np.ones_like(in_survey.std, dtype='int64')
+    count = 0
+    for cell_ix, cell in enumerate(unique_cells):
+        # Cycle through each cell that contains data
+        # Get all data points within each cell
+        data_in_current_cell_ix = (np.where(cell == c))[0]
+        if len(data_in_current_cell_ix) > 1:
+            # Find the data point closest to the cell center
+            cell_tree = cKDTree(padding_data[data_in_current_cell_ix, :2])
+            _, ii = cell_tree.query(cell_centers[cell_ix, :])
+        else:
+            # If only one data point, then use that!
+            ii = 0
+
+        # Get the coordinates of the point closest to cell center
+        rx_loc_new[count, :] = padding_data[data_in_current_cell_ix[ii], :]
+        # Calculate a new std based on average std and variability of data
+        std_new[count] = np.nanmax([np.mean(padding_std[data_in_current_cell_ix]),
+                                    np.std(padding_obs[data_in_current_cell_ix])])
+        # And the most common dobs within the cell
+        obs_new[count] = np.median(padding_obs[data_in_current_cell_ix])
+        pad_points_kept[count] = is_padding_idx[data_in_current_cell_ix[ii]]
+        count += 1
+
+    # Create a new data object
+    # By combining the decimated padding cells with
+    # the original grid cell data (unchanged)
+    mask = ~np.isnan(obs_new)
+    rx_loc_new = np.vstack([rx_loc_new[mask, :], in_survey.rxLoc[~is_padding, :]])
+    obs_new = np.r_[obs_new[mask], in_survey.dobs[~is_padding]]
+    std_new = np.r_[std_new[mask], in_survey.std[~is_padding]]
+    pad_points_kept2 = np.r_[pad_points_kept[mask],
+                             np.arange(0, len(is_padding),
+                                       dtype='int64')[~is_padding]]
+    if isinstance(in_survey, PF.BaseMag.LinearSurvey):
+        dec_obs = PF.BaseMag.RxObs(rx_loc_new)
+        src_field = PF.BaseMag.SrcField([dec_obs], param=in_survey.srcField.param)
+        in_survey_ds = PF.BaseMag.LinearSurvey(src_field, components=in_survey.components)
+    else:
+        dec_obs = PF.BaseGrav.RxObs(rx_loc_new)
+        src_field = PF.BaseGrav.SrcField([dec_obs])
+        in_survey_ds = PF.BaseGrav.LinearSurvey(src_field)
+
+    in_survey_ds.dobs = obs_new
+    in_survey_ds.std = std_new
+
+    if not np.isscalar(data_trend):
+        data_trend = data_trend[pad_points_kept2]
+
+    print("  %.0f data points retained (%.1f%%)" %
+          (len(in_survey_ds.dobs),
+           100 * len(in_survey_ds.dobs) / len(padded_survey_locs)))
+
+    return in_survey_ds, data_trend
+
+def plot_convergence_curves(uncert, inversion_output, target_chi, out_dir, IRLS=None):
+    """Plot inversion convergence curves, including IRLS information where available"""
+
+    fig, axs = plt.figure(), plt.subplot()
+    axs.plot(inversion_output.phi_d, 'ko-', lw=2)
+    phi_d_target = 0.5*target_chi*len(uncert)
+    left, right = plt.xlim()
+    axs.plot(
+        np.r_[left, right],
+        np.r_[phi_d_target, phi_d_target], 'r--'
+    )
+
+    plt.yscale('log')
+    if IRLS is None:
+        filename_suffix = ''
+    else:
+        filename_suffix = '_spherical'
+        bottom, top = plt.ylim()
+        axs.plot(
+            np.r_[IRLS.iterStart, IRLS.iterStart],
+            np.r_[bottom, top], 'k:'
+        )
+
+    twin = axs.twinx()
+    twin.plot(inversion_output.phi_m, 'k--', lw=2)
+    plt.autoscale(enable=True, axis='both', tight=True)
+    if IRLS is not None:
+        axs.text(
+            IRLS.iterStart, top,
+            'IRLS', va='top', ha='center',
+            rotation='vertical', size=12,
+            bbox={'facecolor': 'white'}
+        )
+
+    axs.set_ylabel(r'$\phi_d$', size=16, rotation=0)
+    axs.set_xlabel('Iterations', size=14)
+    twin.set_ylabel(r'$\phi_m$', size=16, rotation=0)
+    t = fig.get_size_inches()
+    fig.set_size_inches(t[0]*2, t[1]*2)
+    fig.savefig(out_dir + 'Convergence_curve' + filename_suffix + '.png',
+                bbox_inches='tight', dpi=300)
+    plt.show(block=False)
 
 dsep = os.path.sep
 input_file = sys.argv[1]
 
 if input_file is not None:
     workDir = dsep.join(
-                os.path.dirname(os.path.abspath(input_file)).split(dsep)
+            os.path.dirname(os.path.abspath(input_file)).split(dsep)
             )
     if len(workDir) > 0:
         workDir += dsep
@@ -55,7 +238,7 @@ with open(input_file, 'r') as f:
     driver = json.load(f)
 
 input_dict = {k.lower() if isinstance(k, str) else k:
-              v.lower() if isinstance(v, str) else v for k,v in driver.items()}
+              v.lower() if isinstance(v, str) else v for k, v in driver.items()}
 
 assert "inversion_type" in list(input_dict.keys()), (
     "Require 'inversion_type' to be set: 'grav', 'mag', 'mvi', or 'mvis'"
@@ -90,6 +273,14 @@ if "inducing_field_aid" in list(input_dict.keys()):
 
 else:
     inducing_field_aid = None
+
+if "add_data_padding" in list(input_dict.keys()):
+    add_data_padding = input_dict["add_data_padding"]
+
+    assert (~add_data_padding), \
+        "'add_data_padding' is currently only enabled for Geosoft Grid imports"
+else:
+    add_data_padding = False
 
 if input_dict["data_type"] in ['ubc_grav']:
 
@@ -135,10 +326,8 @@ else:
 rxLoc = survey.srcField.rxList[0].locs
 
 # 0-level the data if required, data_trend = 0 level
-if (
-    "detrend" in list(input_dict.keys()) and
-    input_dict["data_type"] in ['ubc_mag', 'ubc_grav']
-):
+if ("detrend" in list(input_dict.keys()) and
+        input_dict["data_type"] in ['ubc_mag', 'ubc_grav']):
 
     for key, value in input_dict["detrend"].items():
         assert key in ["all", "corners"], "detrend key must be 'all' or 'corners'"
@@ -148,8 +337,7 @@ if (
         order = value
 
     data_trend, _ = matutils.calculate_2D_trend(
-            rxLoc, survey.dobs, order, method
-            )
+        rxLoc, survey.dobs, order, method)
 
     survey.dobs -= data_trend
 
@@ -158,23 +346,24 @@ if (
         survey.std = np.ones(survey.dobs.shape)
 
     if input_dict["data_type"] in ['ubc_mag']:
-        Utils.io_utils.writeUBCmagneticsObservations(os.path.splitext(
-            outDir + input_dict["data_file"])[0] + '_trend.mag',
-            survey, data_trend
-        )
-        Utils.io_utils.writeUBCmagneticsObservations(os.path.splitext(
-            outDir + input_dict["data_file"])[0] + '_detrend.mag',
-            survey, survey.dobs
-        )
+        Utils.io_utils.writeUBCmagneticsObservations(
+            os.path.splitext(
+                    outDir + input_dict["data_file"])[0] + '_trend.mag',
+                    survey, data_trend)
+        Utils.io_utils.writeUBCmagneticsObservations(
+            os.path.splitext(
+                    outDir + input_dict["data_file"])[0] + '_detrend.mag',
+                    survey, survey.dobs)
     else:
-        Utils.io_utils.writeUBCgravityObservations(os.path.splitext(
-            outDir + input_dict["data_file"])[0] + '_trend.mag',
-            survey, data_trend
-        )
-        Utils.io_utils.writeUBCgravityObservations(os.path.splitext(
-            outDir + input_dict["data_file"])[0] + '_detrend.mag',
-            survey, survey.dobs
-        )
+        Utils.io_utils.writeUBCgravityObservations(
+            os.path.splitext(
+                    outDir + input_dict["data_file"])[0] + '_trend.mag',
+                    survey, data_trend)
+        Utils.io_utils.writeUBCgravityObservations(
+            os.path.splitext(
+                    outDir + input_dict["data_file"])[0] + '_detrend.mag',
+                    survey, survey.dobs)
+
 else:
     data_trend = 0.0
 
@@ -186,8 +375,7 @@ if (
     new_uncert = input_dict["new_uncert"]
     if new_uncert:
         assert (len(new_uncert) == 2 and all(np.asarray(new_uncert) >= 0)), (
-            "New uncertainty requires pct fraction (0-1) and floor."
-        )
+                "New uncertainty requires pct fraction (0-1) and floor.")
         survey.std = np.maximum(abs(new_uncert[0]*survey.dobs), new_uncert[1])
 
 if survey.std is None:
@@ -228,6 +416,14 @@ else:
     else:
         inversion_mesh_type = "TREE"
 
+if "decimate_to_mesh" in list(input_dict.keys()):
+    decimate_to_mesh = input_dict["decimate_to_mesh"]
+
+    assert (inversion_mesh_type.upper() == "TREE"), \
+        "'decimate_to_mesh' is currently only enabled for Octree meshes"
+
+else:
+    decimate_to_mesh = False
 
 if "shift_mesh_z0" in list(input_dict.keys()):
     # Determine if the mesh is tensor or tree
@@ -404,13 +600,11 @@ else:
 if "lower_bound" in list(input_dict.keys()):
     lower_bound = input_dict["lower_bound"]
 else:
-
     lower_bound = -np.inf
 
 if "upper_bound" in list(input_dict.keys()):
     upper_bound = input_dict["upper_bound"]
 else:
-
     upper_bound = np.inf
 
 # @Nick: Not sure we want to keep this, not so transparent
@@ -494,6 +688,42 @@ if parallelized:
     dask.config.set(scheduler='threads')
     dask.config.set(num_workers=n_cpu)
 
+if add_data_padding or decimate_to_mesh:
+    # Scipy.interpolate flags divide-by-zero and invalid value errors when making
+    # the mesh. They don't affect the result, so we suppress them temporarily.
+    old_settings = np.seterr(divide='ignore', invalid='ignore')
+    # Create a quadtree mesh using the same params as the full mesh
+    decimate_mesh = meshutils.mesh_builder_xyz(
+        survey.rxLoc[:, :2],
+        core_cell_size[:2],
+        padding_distance=padding_distance[:2],
+        mesh_type='tree'
+    )
+
+    decimate_mesh = meshutils.refine_tree_xyz(
+        decimate_mesh, survey.rxLoc[:, :2], method='surface',
+        max_distance=max_distance,
+        octree_levels=octree_levels_obs,
+        octree_levels_padding=octree_levels_padding,
+        finalize=True,
+    )
+    np.seterr(**old_settings)
+
+    if decimate_to_mesh:
+        print("Decimating the whole survey to the mesh")
+        survey, data_trend = decimate_survey_to_mesh(decimate_mesh,
+                                                     data_trend, survey)
+    elif add_data_padding:
+        print("Decimating the padding points to the mesh")
+        survey, data_trend = decimate_survey_to_mesh(decimate_mesh,
+                                                     data_trend, survey, survey)
+
+    Utils.io_utils.writeUBCmagneticsObservations(
+    	outDir + os.path.splitext(
+    	os.path.basename(input_dict["data_file"]))[0] + '_ds.mag',
+    	survey, survey.dobs
+    )
+
 ###############################################################################
 # Processing
 
@@ -503,7 +733,6 @@ topo_elevations_at_data_locs = np.c_[
     rxLoc[:, :2],
     topo_interp_function(rxLoc[:, :2])
 ]
-
 
 def createLocalMesh(rxLoc, ind_t):
     """
@@ -585,11 +814,14 @@ if tiled_inversion:
         print("Tiling:" + str(count))
 
         if rxLoc.shape[0] > 40000:
-            # Default clustering algorithm goes slow on large data files, so switch to simple method
-            tiles, binCount, tileIDs, tile_numbers = Utils.modelutils.tileSurveyPoints(rxLoc, count, method=None)
+            # Default clustering algorithm goes slow on large data files,
+            # so switch to simple method
+            tiles, binCount, tileIDs, tile_numbers = \
+                Utils.modelutils.tileSurveyPoints(rxLoc, count, method=None)
         else:
             # Use clustering
-            tiles, binCount, tileIDs, tile_numbers = Utils.modelutils.tileSurveyPoints(rxLoc, count)
+            tiles, binCount, tileIDs, tile_numbers = \
+                Utils.modelutils.tileSurveyPoints(rxLoc, count)
 
         # Grab the smallest bin and generate a temporary mesh
         indMax = np.argmax(binCount)
@@ -718,9 +950,9 @@ activeCells = Utils.surface2ind_topo(mesh, topo)
 
 if isinstance(mesh, Mesh.TreeMesh):
     Mesh.TreeMesh.writeUBC(
-          mesh, outDir + 'OctreeMeshGlobal.msh',
-          models={outDir + 'ActiveSurface.act': activeCells}
-        )
+            mesh, outDir + 'OctreeMeshGlobal.msh',
+            models={outDir + 'ActiveSurface.act': activeCells}
+            )
 else:
     mesh.writeModelUBC(
           'ActiveSurface.act', activeCells
@@ -806,7 +1038,6 @@ def get_model(input_value, vector=vector_property):
 
     return mkvc(model)
 
-
 mref = get_model(model_reference)
 mstart = get_model(model_start)
 
@@ -825,7 +1056,7 @@ if (inversion_style == "homogeneous_units") and not vector_property:
     # Build list of indecies for the geounits
     index = []
     for unit in units:
-        index.append(mstart==unit)
+        index.append(mstart == unit)
     nC = len(index)
 
     # Collapse mstart and mref to the median reference values
@@ -968,7 +1199,9 @@ if tiled_inversion:
 
         print("Tile " + str(ind+1) + " of " + str(X1.shape[0]))
 
-        local_misfit, global_weights = createLocalProb(local_mesh, local_survey, global_weights, ind)
+        local_misfit, global_weights = createLocalProb(local_mesh,
+                                                       local_survey,
+                                                       global_weights, ind)
 
         # Add the problems to a Combo Objective function
         if ind == 0:
@@ -988,7 +1221,8 @@ global_weights = (global_weights/np.max(global_weights))
 if isinstance(mesh, Mesh.TreeMesh):
     Mesh.TreeMesh.writeUBC(
               mesh, outDir + 'OctreeMeshGlobal.msh',
-              models={outDir + 'SensWeights.mod': (activeCellsMap*model_map*global_weights)[:mesh.nC]}
+              models={outDir + 'SensWeights.mod': \
+                      (activeCellsMap*model_map*global_weights)[:mesh.nC]}
             )
 else:
     mesh.writeModelUBC(
@@ -1110,28 +1344,7 @@ print("Final Misfit:  %.3e" %
       (0.5 * np.sum(((survey.dobs - invProb.dpred)/survey.std)**2.)))
 
 if show_graphics:
-    # Plot convergence curves
-    fig, axs = plt.figure(), plt.subplot()
-    axs.plot(inversion_output.phi_d, 'ko-', lw=2)
-    phi_d_target = 0.5*target_chi*len(survey.std)
-    left, right = plt.xlim()
-    axs.plot(
-        np.r_[left, right],
-        np.r_[phi_d_target, phi_d_target], 'r--'
-    )
-    plt.yscale('log')
-
-    twin = axs.twinx()
-    twin.plot(inversion_output.phi_m, 'k--', lw=2)
-    plt.autoscale(enable=True, axis='both', tight=True)
-
-    axs.set_ylabel('$\phi_d$', size=16, rotation=0)
-    axs.set_xlabel('Iterations', size=14)
-    twin.set_ylabel('$\phi_m$', size=16, rotation=0)
-    t = fig.get_size_inches()
-    fig.set_size_inches(t[0]*2, t[1]*2)
-    fig.savefig(outDir + 'Convergence_curve.png', bbox_inches='tight', dpi=600)
-    plt.show(block=False)
+    plot_convergence_curves(survey.std, inversion_output, target_chi, outDir)
 
 if getattr(global_misfit, 'objfcts', None) is not None:
     dpred = np.zeros(survey.nD)
@@ -1144,13 +1357,23 @@ if input_dict["inversion_type"] == 'grav':
 
     Utils.io_utils.writeUBCgravityObservations(
             outDir + 'Predicted_' + input_dict["inversion_type"] + '.dat',
-            survey, dpred+data_trend)
+            survey, dpred)
+
+    if (len(np.shape(data_trend)) > 0) or (data_trend == 0):
+        Utils.io_utils.writeUBCgravityObservations(
+                outDir + 'Predicted_' + input_dict["inversion_type"] + '_+trend.dat',
+                survey, dpred+data_trend)
 
 elif input_dict["inversion_type"] in ['mvi', 'mvis', 'mag']:
 
     Utils.io_utils.writeUBCmagneticsObservations(
             outDir + 'Predicted_' + input_dict["inversion_type"][:3] + '.dat',
-            survey, dpred+data_trend)
+            survey, dpred)
+
+    if (len(np.shape(data_trend)) > 0) or (data_trend == 0):
+        Utils.io_utils.writeUBCmagneticsObservations(
+                outDir + 'Predicted_' + input_dict["inversion_type"][:3] + '_+trend.dat',
+                survey, dpred+data_trend)
 
 # Repeat inversion in spherical
 if input_dict["inversion_type"] == 'mvis':
@@ -1159,7 +1382,7 @@ if input_dict["inversion_type"] == 'mvis':
         max_irls_iterations = input_dict["max_irls_iterations"]
         assert max_irls_iterations >= 0, "Max IRLS iterations must be >= 0"
     else:
-        if np.all(model_norms==2):
+        if np.all(model_norms == 2):
             # Cartesian or not sparse
             max_irls_iterations = 0
 
@@ -1300,44 +1523,10 @@ if input_dict["inversion_type"] == 'mvis':
     Utils.io_utils.writeVectorUBC(
         mesh,
         save_model.fileName + '_l2.fld',
-        vec
+        vec_xyz
     )
     if show_graphics:
-        # Plot convergence curves
-        fig, axs = plt.figure(), plt.subplot()
-        axs.plot(inversion_output.phi_d, 'ko-', lw=2)
-        phi_d_target = 0.5*target_chi*len(survey.std)
-        left, right = plt.xlim()
-        axs.plot(
-            np.r_[left, right],
-            np.r_[phi_d_target, phi_d_target], 'r--'
-        )
-
-        plt.yscale('log')
-        bottom, top = plt.ylim()
-        axs.plot(
-            np.r_[IRLS.iterStart, IRLS.iterStart],
-            np.r_[bottom, top], 'k:'
-        )
-
-        twin = axs.twinx()
-        twin.plot(inversion_output.phi_m, 'k--', lw=2)
-        plt.autoscale(enable=True, axis='both', tight=True)
-        axs.text(
-            IRLS.iterStart, top,
-            'IRLS', va='top', ha='center',
-            rotation='vertical', size=12,
-            bbox={'facecolor': 'white'}
-        )
-
-        axs.set_ylabel('$\phi_d$', size=16, rotation=0)
-        axs.set_xlabel('Iterations', size=14)
-        twin.set_ylabel('$\phi_m$', size=16, rotation=0)
-        t = fig.get_size_inches()
-        fig.set_size_inches(t[0]*2, t[1]*2)
-        fig.savefig(outDir + 'Convergence_curve_spherical.png',
-                    bbox_inches='tight', dpi=600)
-        plt.show(block=False)
+        plot_convergence_curves(survey.std, inversion_output, target_chi, outDir, IRLS)
 
     if getattr(global_misfit, 'objfcts', None) is not None:
         dpred = np.zeros(survey.nD)

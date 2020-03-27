@@ -1301,8 +1301,7 @@ def get_model(input_value, vector=vector_property):
                     ], np.ones(mesh.nC)
                 )[0, :]
 
-    return model
-
+    return mkvc(model)
 
 mref = get_model(model_reference)
 mstart = get_model(model_start)
