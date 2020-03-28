@@ -187,24 +187,25 @@ def convert_geosoft_gridfile(gridname, topo, survey_altitude,
     # the grid to the west or south by half a cell when using
     # MAX ENTROPY fill. This should not be used if using MIN CURVATURE
     # It shouldn't be needed once Geosoft fix the bug
-    dx = GsftGrid.properties.get('dy', None)
+    dx = GsftGrid.properties.get('dx', None)
+    dy = GsftGrid.properties.get('dy', None)
     print('  Cell size: %.3f' % dx)
     print('  x mod dx: %.3f' % (GsftGrid.values[:, :, 0].min() % dx))
-    print('  y mod dy: %.3f' % (GsftGrid.values[:, :, 1].min() % dx))
+    print('  y mod dy: %.3f' % (GsftGrid.values[:, :, 1].min() % dy))
     if padded:
         # Apply the half cell shifts only to the padded grid
         if needs_shift_x:
             print('  X grid shift applied')
             new_locs[:, 0] = new_locs[:, 0] + (dx * 0.5)
-        if needs_shift_y:
-            print('  Y grid shift applied')
-            new_locs[:, 1] = new_locs[:, 1] + (dx * 0.5)
+#        if needs_shift_y:
+#            print('  Y grid shift applied')
+#            new_locs[:, 1] = new_locs[:, 1] + (dy * 0.5)
     elif ~padded:
         # Test of the core grid looks like it might need shifting
         GsftGrid.needs_shift_x = GsftGrid.values[:, :, 0].min() % dx == 0
         if GsftGrid.needs_shift_x:
             print(' Needs shift in X')
-        GsftGrid.needs_shift_y = GsftGrid.values[:, :, 1].min() % dx == 0
+        GsftGrid.needs_shift_y = GsftGrid.values[:, :, 1].min() % dy == 0
         if GsftGrid.needs_shift_y:
             print(' Needs shift in Y')
 
@@ -915,6 +916,8 @@ else:
 
 if "chunk_by_rows" in list(input_dict.keys()):
     chunk_by_rows = input_dict["chunk_by_rows"]
+elif eqs_mvi:
+    chunk_by_rows = True
 else:
     chunk_by_rows = False
 
