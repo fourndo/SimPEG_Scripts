@@ -15,7 +15,7 @@ Parameters
      - ``ubc_grav``: See `GRAV3D documentation <https://grav3d.readthedocs.io/en/latest/content/files/obs.html#observations-file>`_
      - ``ubc_mag``: See `MAG3D documentation <https://mag3d.readthedocs.io/en/latest/content/files/obs.html#observations-file>`_
 * ``inversion_type``: str
-    Inversion typ
+    Inversion type
         - 'grav': Invert for density in (g/cc).
         - 'mag': Invert for magnetic susceptibility in (SI).
         - 'mvi': Invert for effective susceptibility in Cartesian coordinates.
@@ -26,14 +26,25 @@ Parameters
 Optional settings: type = DEFAULT
 ---------------------------------
 
+* ``add_data_padding``: bool = False
+    Add an area of data padding around the input survey to manage edge effects
+	*Currently only enabled for Geosoft grid imports*
 * ``alphas``: list = [1, 1, 1, 1]
     Alpha weights used to scale the regularization functions.
         - Scalar (density, susceptibility): Requires 4 values for [a_s, a_x, a_y, a_z]
         - Vector (mvi): Requires 12 values for [a_s, a_x, a_y, a_z, t_s, t_x, t_y, t_z, p_s, p_x, p_y, p_z]
+* ``alphas_mvis``: list = [1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1]
+    Alpha weights used to scale the regularization functions only used for mvis inversions.
+        - Vector (mvi): Requires 12 values for [a_s, a_x, a_y, a_z, t_s, t_x, t_y, t_z, p_s, p_x, p_y, p_z]
+* ``chunk_by_rows``: bool = False
+    Alternate memory management mode that can be faster for very large sensitivity or forward calculations 
 * ``depth_core``: dict: {str, float} = {"method": value}
     Thickness of core region defined by ``method``:
         - ``value``: Set ``value`` in meters
         - ``auto``: Compute mesh depth as: ``value`` * survey width.
+* ``decimate_to_mesh``: bool = False
+    Downsample the input data to at most 1 observation above each grid cell. This significantly reduces the problem size when using padding, as well as when ``core_cell_size`` is larger than the data spacing.
+	*Currently only enabled for OcTree meshes*
 * ``detrend``: dict {str: int} = None
     Remove trend from the data {method: order}.
         ``method``
@@ -46,14 +57,22 @@ Optional settings: type = DEFAULT
 * ``input_mesh_file``: str = None
     Mesh file in UBC format used to load the ``model_reference`` and ``model_start``. The same mesh is used for the inversion if ``inversion_mesh_type`` is same type.
 * ``inversion_mesh_type``: str = "tree"
-    Type of mesh to be used in the inversion. If type differs from the ``input_mesh_file``, then the input ``model_reference`` and ``model_start`` are trasnfered over using a NearestNeighbour interpolation.
+    Type of mesh to be used in the inversion. If type differs from the ``input_mesh_file``, then the input ``model_reference`` and ``model_start`` are transfered over using a NearestNeighbour interpolation.
 * ``inversion_style``: str
     Inversion style chosen from:
         - ``voxel``: Standard voxel base inversion [DEFAULT]
         - ``homogeneous_units``: Invert for best-fitting value for each domain defined by the unique values found in ``model_start``.
+* ``lower_bound``: float = -Inf
+    Value to use for lower bound in each cell
 * ``max_chunk_size``: float = 128
         Size of data chunks to store in memory
-* ``model_start``: str or float or list[float] = 0
+* ``max_RAM``: float = 4
+        Maximum available RAM. If ``tiled_inversion`` is True, then the tile size will be defined to keep the problem smaller than ``max_RAM``
+* ``model_norms``: list = [2, 2, 2, 2]
+    Model norms to apply, in range of 0-2 where 2 is least-squares
+        - Scalar (density, susceptibility): Requires 4 values for [Lp_s, Lp_x, Lp_y, Lp_z]
+        - Vector (mvi): Requires 12 values for [Lp_s, Lp_x, Lp_y, Lp_z, t_s, t_x, t_y, t_z, p_s, p_x, p_y, p_z]
+* ``model_start``: str or float or list[float] = 1e-4
     Starting model to be loaded with the ``input_mesh``
         - str = ``filename``: Load starting model from file. If ``inversion_mesh_type`` differs from the ``input_mesh_file``, the model values are interpolated to the new mesh.
         - float = value: Start property, scalar [1e-4].
@@ -66,8 +85,8 @@ Optional settings: type = DEFAULT
         - list = [value, value, value]: Start property model values for vector model [1e-4, 1e-4, 1e-4]
                  If scalar input used for vector model, assume scalar amplitude in inducing field direction.
 * ``new_uncert``: list = [0, 1]
-    List of values to be used for uncertainties set as [%, floor] where
-    uncertainty = % * |data| + floor
+    List of values to be used for uncertainties set as [%, floor] (% from 0-1) where
+    uncertainty = max(% * |data|, floor)
 * ``no_data_value``: float = -100
     Value to use for no-data-value
 * ``parallelized``: bool = True,
@@ -78,6 +97,10 @@ Optional settings: type = DEFAULT
     Show graphic plots
 * ``target_chi``: float = 1
     Target chi factor
+* ``tiled_inversion``: bool = True,
+    Use tiles to speed up the inversion and keep the problem small
+* ``upper_bound``: float = Inf
+    Value to use for upper bound in each cell
 
 
 
@@ -87,7 +110,7 @@ Magnetic only
 * "inducing_field_aid": [TOTAL FIELD, DIP, AZIMUTH], New inducing field as floats
 
 
-More documentation to come in 2019!!
+More documentation to come in 2020!!
 Stay tunes.
 
 
