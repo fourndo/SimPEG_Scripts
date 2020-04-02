@@ -177,10 +177,8 @@ def convert_geosoft_gridfile(gridname, topo, survey_altitude,
 
     # Extract grid points
     new_locs = np.reshape(GsftGrid.values, (GsftGrid.nC, 4))
-    # Create mask and remove dummies
-    new_locs_mask = ~np.isnan(new_locs[:, 3])
     # Remove dummies
-    new_locs = new_locs[new_locs_mask, :4]
+    new_locs = new_locs[~np.isnan(new_locs[:, 3]), :4]
 
     # IMPORTANT: This shifts the padded grid half a cell to the east
     # or north to compensate for a bug in Geosoft API 9.6 that shifts
@@ -193,45 +191,43 @@ def convert_geosoft_gridfile(gridname, topo, survey_altitude,
     print('  x mod dx: %.3f' % (GsftGrid.values[:, :, 0].min() % dx))
     print('  y mod dy: %.3f' % (GsftGrid.values[:, :, 1].min() % dy))
     if padded:
-        # Apply the half cell shifts only to the padded grid
-        if needs_shift_x:
+        # Apply the half cell shifts only to the padded grid if x mod dx for
+        # original grid was 0 but now isn't (ie, if it changed it got shifted!)
+        if needs_shift_x and GsftGrid.values[:, :, 0].min() % dx > 0:
             print('  X grid shift applied')
             new_locs[:, 0] = new_locs[:, 0] + (dx * 0.5)
-        if needs_shift_y:
+        if needs_shift_y and GsftGrid.values[:, :, 1].min() % dy > 0:
             print('  Y grid shift applied')
             new_locs[:, 1] = new_locs[:, 1] + (dy * 0.5)
-    elif ~padded:
+            
+        topo_extent_label = 'padding'
+    else:
         # Test of the core grid looks like it might need shifting
         GsftGrid.needs_shift_x = GsftGrid.values[:, :, 0].min() % dx == 0
-        if GsftGrid.needs_shift_x:
-            print(' Needs shift in X')
         GsftGrid.needs_shift_y = GsftGrid.values[:, :, 1].min() % dy == 0
-        if GsftGrid.needs_shift_y:
-            print(' Needs shift in Y')
+        topo_extent_label = ''
 
     # Only used to minimize the extent of topo resampling for large problems
     max_distance = 2 * dx
 
-    assert ((topo[:, 0].min() <= (new_locs[:, 0].min() - max_distance)) or
-            (topo[:, 0].max() >= (new_locs[:, 0].max() + max_distance)) or
-            (topo[:, 1].min() <= (new_locs[:, 1].min() - max_distance)) or
+    assert ((topo[:, 0].min() <= (new_locs[:, 0].min() - max_distance)) and
+            (topo[:, 0].max() >= (new_locs[:, 0].max() + max_distance)) and
+            (topo[:, 1].min() <= (new_locs[:, 1].min() - max_distance)) and
             (topo[:, 1].max() >= (new_locs[:, 1].max() + max_distance))), \
-           "Topography data does not extend to edge of data padding"
+           "Topography data does not extend to edge of data {}".format(topo_extent_label)
 
     # Create new data locations draped at survey_altitude above topo
     # When the topo data is much larger than the survey this could be slow
     # So only use topo points near the survey
-    # However, this seems to break the interpolate and we get some nan elevations
-#    ix = ((topo[:, 0] >= (new_locs[:, 0].min() - max_distance)) &
-#          (topo[:, 0] <= (new_locs[:, 0].max() + max_distance)) &
-#          (topo[:, 1] >= (new_locs[:, 1].min() - max_distance)) &
-#          (topo[:, 1] <= (new_locs[:, 1].max() + max_distance)))
-#    F = LinearNDInterpolator(topo[ix, :2], topo[ix, 2] + survey_altitude)
-    F = LinearNDInterpolator(topo[:, :2], topo[:, 2] + survey_altitude)
+    ix = ((topo[:, 0] >= (new_locs[:, 0].min() - max_distance)) &
+          (topo[:, 0] <= (new_locs[:, 0].max() + max_distance)) &
+          (topo[:, 1] >= (new_locs[:, 1].min() - max_distance)) &
+          (topo[:, 1] <= (new_locs[:, 1].max() + max_distance)))
+    F = LinearNDInterpolator(topo[ix, :2], topo[ix, 2] + survey_altitude)
 
     new_locs[:, 2] = F(new_locs[:, :2])
-    assert ~any(np.isnan(new_locs[:, 2])), \
-            "Topography interpolation for grid failed"
+    assert not any(np.isnan(new_locs[:, 2])), \
+        "Topography interpolation for grid failed"
 
     # Create survey object
     if data_type == 'geosoft_mag':
