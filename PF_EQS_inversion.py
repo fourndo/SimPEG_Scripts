@@ -1620,23 +1620,23 @@ else:
 if input_dict["inversion_type"] == 'grav':
 
     Utils.io_utils.writeUBCgravityObservations(
-            outDir + 'Predicted_' + input_dict["inversion_type"] + '.dat',
+            outDir + 'Predicted_' + input_dict["inversion_type"] + '.pre',
             survey, dpred)
 
     if (len(np.shape(data_trend)) > 0) or (data_trend == 0):
         Utils.io_utils.writeUBCgravityObservations(
-                outDir + 'Predicted_' + input_dict["inversion_type"] + '_+trend.dat',
+                outDir + 'Predicted_' + input_dict["inversion_type"] + '_+trend.pre',
                 survey, dpred+data_trend)
 
 elif input_dict["inversion_type"] in ['mvi', 'mvis', 'mag']:
 
     Utils.io_utils.writeUBCmagneticsObservations(
-            outDir + 'Predicted_' + input_dict["inversion_type"][:3] + '.dat',
+            outDir + 'Predicted_' + input_dict["inversion_type"][:3] + '.pre',
             survey, dpred)
 
     if (len(np.shape(data_trend)) > 0) or (data_trend == 0):
         Utils.io_utils.writeUBCmagneticsObservations(
-                outDir + 'Predicted_' + input_dict["inversion_type"][:3] + '_+trend.dat',
+                outDir + 'Predicted_' + input_dict["inversion_type"][:3] + '_+trend.pre',
                 survey, dpred+data_trend)
 
 # Repeat inversion in spherical
@@ -1801,8 +1801,11 @@ if input_dict["inversion_type"] == 'mvis':
         dpred = global_misfit.survey.dpred(mrec_S)
 
     Utils.io_utils.writeUBCmagneticsObservations(
-        outDir + 'Predicted_mvis.pre', survey, dpred+data_trend
-    )
+            outDir + 'Predicted_mvis.pre', survey, dpred)
+
+    if (len(np.shape(data_trend)) > 0) or (data_trend == 0):
+        Utils.io_utils.writeUBCmagneticsObservations(
+                outDir + 'Predicted_mvis+trend.pre', survey, dpred+data_trend)
 
 ###############################################################################
 # FORWARD
