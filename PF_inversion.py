@@ -1314,50 +1314,31 @@ if initial_beta is None:
     directiveList.append(Directives.BetaEstimate_ByEig(beta0_ratio=1e+1))
 
 if vector_property:
-    directiveList.append(Directives.VectorInversion(
-        inversion_type = input_dict["inversion_type"])
+    directiveList.append(
+        Directives.VectorInversion(
+            inversion_type = input_dict["inversion_type"]
+        )
     )
 
 # Pre-conditioner
-directiveList.append(
-    Directives.Update_IRLS(
-        f_min_change=1e-4,
-        maxIRLSiter=max_irls_iterations,
-        minGNiter=1, beta_tol=0.5, prctile=90, floorEpsEnforced=True,
-        coolingRate=1, coolEps_q=True, coolEpsFact=1.2,
-        betaSearch=False
-    )
-)
+update_Jacobi = Directives.UpdatePreconditioner()
 
-directiveList.append(Directives.UpdatePreconditioner())
-
-directiveList.append(
-    Directives.SaveUBCModelEveryIteration(
-        mapping=activeCellsMap * model_map,
-        mesh=mesh,
-        fileName=outDir + input_dict["inversion_type"],
-        vector=input_dict["inversion_type"][0:3] == 'mvi'
-    )
-)
-
-directiveList.append(
-    Directives.SaveUBCPredictedEveryIteration(
-        survey=survey,
-        fileName=outDir + input_dict["inversion_type"],
-        format=input_dict["inversion_type"]
-    )
-)
+IRLS = Directives.Update_IRLS(
+                        f_min_change=1e-3, minGNiter=1, beta_tol=0.25,
+                        maxIRLSiter=max_irls_iterations,
+                        chifact_target=target_chi,
+                        betaSearch=False)
 
 # Put all the parts together
 inv = Inversion.BaseInversion(
-    invProb, directiveList=directiveList
+    invProb, directiveList=directiveList + [IRLS, update_Jacobi]
 )
 
 # SimPEG reports half phi_d, so we scale to matrch
 print(
     "Start Inversion: " + inversion_style +
     "\nTarget Misfit: %.2e (%.0f data with chifact = %g)" % (
-        0.5 * target_chi * len(survey.std), len(survey.std), target_chi
+        0.5*target_chi*len(survey.std), len(survey.std), target_chi
     )
 )
 
