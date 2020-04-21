@@ -1249,18 +1249,23 @@ else:
 
     # Create a regularization
     reg_p = Regularization.Sparse(
-        mesh, indActive=activeCells, mapping=regularization_map.p,
+        mesh, indActive=activeCells,
+        mapping=regularization_map.p,
+        gradientType=gradient_type,
         alpha_s=alphas[0],
         alpha_x=alphas[1],
         alpha_y=alphas[2],
         alpha_z=alphas[3]
     )
+
     reg_p.cell_weights = (regularization_map.p * global_weights)
-    reg_p.norms = np.c_[2, 2, 2, 2]
+    reg_p.norms = np.c_[model_norms].T
     reg_p.mref = mref
 
     reg_s = Regularization.Sparse(
-        mesh, indActive=activeCells, mapping=regularization_map.s,
+        mesh, indActive=activeCells,
+        mapping=regularization_map.s,
+        gradientType=gradient_type,
         alpha_s=alphas[4],
         alpha_x=alphas[5],
         alpha_y=alphas[6],
@@ -1268,29 +1273,33 @@ else:
     )
 
     reg_s.cell_weights = (regularization_map.s * global_weights)
-    reg_s.norms = np.c_[2, 2, 2, 2]
+    reg_s.norms = np.c_[model_norms].T
     reg_s.mref = mref
 
     reg_t = Regularization.Sparse(
-        mesh, indActive=activeCells, mapping=regularization_map.t,
+        mesh, indActive=activeCells,
+        mapping=regularization_map.t,
+        gradientType=gradient_type,
         alpha_s=alphas[8],
         alpha_x=alphas[9],
         alpha_y=alphas[10],
         alpha_z=alphas[11]
     )
 
-    reg_t.alphas = alphas[8:]
     reg_t.cell_weights = (regularization_map.t * global_weights)
-    reg_t.norms = np.c_[2, 2, 2, 2]
+    reg_t.norms = np.c_[model_norms].T
     reg_t.mref = mref
 
     # Assemble the 3-component regularizations
     reg = reg_p + reg_s + reg_t
 
-# Specify how the optimization will proceed, set susceptibility bounds to inf
+    # Specify how the optimization will proceed, set susceptibility bounds to inf
 opt = Optimization.ProjectedGNCG(
-    maxIter=max_global_iterations, lower=lower_bound, upper=upper_bound,
-    maxIterLS=20, maxIterCG=30, tolCG=1e-3
+    maxIter=max_global_iterations,
+    lower=lower_bound, upper=upper_bound,
+    maxIterLS=20, maxIterCG=30, tolCG=1e-3,
+    stepOffBoundsFact=1e-8,
+    LSshorten=0.25
 )
 
 # Create the default L2 inverse problem from the above objects
@@ -1299,242 +1308,58 @@ invProb = InvProblem.BaseInvProblem(global_misfit, reg, opt, beta=initial_beta)
 # Add a list of directives to the inversion
 directiveList = []
 
-# Save model
-inversion_output = Directives.SaveOutputEveryIteration(save_txt=False)
-directiveList.append(inversion_output)
-directiveList.append(Directives.SaveUBCModelEveryIteration(
-    mapping=activeCellsMap*model_map,
-    mesh=mesh,
-    fileName=outDir + input_dict["inversion_type"],
-    vector=input_dict["inversion_type"][0:3] == 'mvi'
-)
-)
+# elif "save_to_ubc" in list(input_dict.keys()):
 
 if initial_beta is None:
     directiveList.append(Directives.BetaEstimate_ByEig(beta0_ratio=1e+1))
 
+if vector_property:
+    directiveList.append(Directives.VectorInversion(
+        inversion_type = input_dict["inversion_type"])
+    )
+
 # Pre-conditioner
-update_Jacobi = Directives.UpdatePreconditioner()
-
-IRLS = Directives.Update_IRLS(
-                        f_min_change=1e-3, minGNiter=1, beta_tol=0.25,
-                        maxIRLSiter=max_irls_iterations,
-                        chifact_target=target_chi,
-                        betaSearch=False)
-
-# Put all the parts together
-inv = Inversion.BaseInversion(
-    invProb, directiveList=directiveList + [IRLS, update_Jacobi]
-)
-
-# SimPEG reports half phi_d, so we scale to matrch
-print(
-    "Start Inversion: " + inversion_style +
-    "\nTarget Misfit: %.2e (%.0f data with chifact = %g)" % (
-        0.5*target_chi*len(survey.std), len(survey.std), target_chi
-    )
-)
-
-# Run the inversion
-mrec = inv.run(mstart)
-
-print("Target Misfit: %.3e (%.0f data with chifact = %g)" %
-      (0.5*target_chi*len(survey.std), len(survey.std), target_chi))
-print("Final Misfit:  %.3e" %
-      (0.5 * np.sum(((survey.dobs - invProb.dpred)/survey.std)**2.)))
-
-if show_graphics:
-    plot_convergence_curves(survey.std, inversion_output, target_chi, outDir)
-
-if getattr(global_misfit, 'objfcts', None) is not None:
-    dpred = np.zeros(survey.nD)
-    for ind, local_misfit in enumerate(global_misfit.objfcts):
-        dpred[local_misfit.survey.ind] += local_misfit.survey.dpred(mrec).compute()
-else:
-    dpred = global_misfit.survey.dpred(mrec)
-
-if input_dict["inversion_type"] == 'grav':
-
-    Utils.io_utils.writeUBCgravityObservations(
-            outDir + 'Predicted_' + input_dict["inversion_type"] + '.dat',
-            survey, dpred)
-
-    if (len(np.shape(data_trend)) > 0) or (data_trend == 0):
-        Utils.io_utils.writeUBCgravityObservations(
-                outDir + 'Predicted_' + input_dict["inversion_type"] + '_+trend.dat',
-                survey, dpred+data_trend)
-
-elif input_dict["inversion_type"] in ['mvi', 'mvis', 'mag']:
-
-    Utils.io_utils.writeUBCmagneticsObservations(
-            outDir + 'Predicted_' + input_dict["inversion_type"][:3] + '.dat',
-            survey, dpred)
-
-    if (len(np.shape(data_trend)) > 0) or (data_trend == 0):
-        Utils.io_utils.writeUBCmagneticsObservations(
-                outDir + 'Predicted_' + input_dict["inversion_type"][:3] + '_+trend.dat',
-                survey, dpred+data_trend)
-
-# Repeat inversion in spherical
-if input_dict["inversion_type"] == 'mvis':
-
-    if "max_irls_iterations" in list(input_dict.keys()):
-        max_irls_iterations = input_dict["max_irls_iterations"]
-        assert max_irls_iterations >= 0, "Max IRLS iterations must be >= 0"
-    else:
-        if np.all(model_norms == 2):
-            # Cartesian or not sparse
-            max_irls_iterations = 0
-
-        else:
-            # Spherical or sparse
-            max_irls_iterations = 20
-
-    # # Extract the vector components for the MVI-S
-    # x = activeCellsMap * (regularization_map.p * invProb.model)
-    # y = activeCellsMap * (regularization_map.s * invProb.model)
-    # z = activeCellsMap * (regularization_map.t * invProb.model)
-
-    # amp = (np.sum(np.c_[x, y, z]**2., axis=1))**0.5
-
-    # Get predicted data for each tile and form/write full predicted to file
-    if getattr(global_misfit, 'objfcts', None) is not None:
-        dpred = np.zeros(survey.nD)
-        for ind, local_misfit in enumerate(global_misfit.objfcts):
-            dpred[local_misfit.survey.ind] += np.asarray(local_misfit.survey.dpred(mrec))
-    else:
-        dpred = global_misfit.survey.dpred(mrec)
-
-    Utils.io_utils.writeUBCmagneticsObservations(
-      outDir + 'MVI_C_pred.pre', survey, dpred+data_trend
-    )
-
-    beta = invProb.beta
-
-    # Change the starting model from Cartesian to Spherical
-    mstart = Utils.matutils.xyz2atp(mrec.reshape((nC, 3), order='F'))
-    mref = Utils.matutils.xyz2atp(mref.reshape((nC, 3), order='F'))
-
-    # Flip the problem from Cartesian to Spherical
-    if getattr(global_misfit, 'objfcts', None) is not None:
-        for misfit in global_misfit.objfcts:
-            misfit.prob.coordinate_system = 'spherical'
-            misfit.prob.model = mstart
-    else:
-        global_misfit.prob.coordinate_system = 'spherical'
-        global_misfit.prob.model = mstart
-
-    # Create a regularization
-    reg_a = Regularization.Sparse(
-        mesh, indActive=activeCells,
-        mapping=regularization_map.p, gradientType=gradient_type,
-        alpha_s=alphas_mvis[0],
-        alpha_x=alphas_mvis[1],
-        alpha_y=alphas_mvis[2],
-        alpha_z=alphas_mvis[3]
-    )
-    reg_a.norms = model_norms[:4].T
-    reg_a.mref = mref
-
-    reg_t = Regularization.Sparse(
-        mesh, indActive=activeCells,
-        mapping=regularization_map.s, gradientType=gradient_type,
-        alpha_s=alphas_mvis[4],
-        alpha_x=alphas_mvis[5],
-        alpha_y=alphas_mvis[6],
-        alpha_z=alphas_mvis[7]
-    )
-    reg_t.space = 'spherical'
-    reg_t.norms = model_norms[4:8].T
-    reg_t.mref = mref
-    reg_t.eps_q = np.pi
-
-    reg_p = Regularization.Sparse(
-        mesh, indActive=activeCells,
-        mapping=regularization_map.t, gradientType=gradient_type,
-        alpha_s=alphas_mvis[8],
-        alpha_x=alphas_mvis[9],
-        alpha_y=alphas_mvis[10],
-        alpha_z=alphas_mvis[11]
-    )
-
-    reg_p.space = 'spherical'
-    reg_p.norms = model_norms[8:].T
-    reg_p.mref = mref
-    reg_p.eps_q = np.pi
-
-    # Assemble the three regularization
-    reg = reg_a + reg_t + reg_p
-
-    Lbound = np.kron(np.asarray([0, -np.inf, -np.inf]), np.ones(nC))
-    Ubound = np.kron(np.asarray([upper_bound, np.inf, np.inf]), np.ones(nC))
-
-    # Add directives to the inversion
-    opt = Optimization.ProjectedGNCG(maxIter=40,
-                                     lower=Lbound,
-                                     upper=Ubound,
-                                     maxIterLS=20,
-                                     maxIterCG=30, tolCG=1e-3,
-                                     stepOffBoundsFact=1e-8,
-                                     LSshorten=0.25)
-
-    invProb = InvProblem.BaseInvProblem(global_misfit, reg, opt, beta=beta*3)
-    #  betaest = Directives.BetaEstimate_ByEig()
-
-    # Here is where the norms are applied
-    IRLS = Directives.Update_IRLS(
+directiveList.append(
+    Directives.Update_IRLS(
         f_min_change=1e-4,
         maxIRLSiter=max_irls_iterations,
         minGNiter=1, beta_tol=0.5, prctile=90, floorEpsEnforced=True,
         coolingRate=1, coolEps_q=True, coolEpsFact=1.2,
         betaSearch=False
     )
+)
 
-    # Special directive specific to the mag amplitude problem. The sensitivity
-    # weights are update between each iteration.
-    ProjSpherical = Directives.ProjSpherical()
-    update_SensWeight = Directives.UpdateSensitivityWeights()
-    update_Jacobi = Directives.UpdatePreconditioner()
-    inversion_output = Directives.SaveOutputEveryIteration(save_txt=False)
-    save_model = Directives.SaveUBCModelEveryIteration(
-        mapping=activeCellsMap,
+directiveList.append(Directives.UpdatePreconditioner())
+
+directiveList.append(
+    Directives.SaveUBCModelEveryIteration(
+        mapping=activeCellsMap * model_map,
         mesh=mesh,
-        vector=True
+        fileName=outDir + input_dict["inversion_type"],
+        vector=input_dict["inversion_type"][0:3] == 'mvi'
     )
-    save_model.fileName = outDir + input_dict["inversion_type"] + "_s"
+)
 
-    inv = Inversion.BaseInversion(invProb,
-                                  directiveList=[
-                                    ProjSpherical, IRLS, update_SensWeight,
-                                    update_Jacobi, save_model, inversion_output
-                                    ])
-
-    # Run the inversion
-    print("Run Spherical inversion")
-    mrec_S = inv.run(mstart)
-
-    print("Target Misfit: %.3e (%.0f data with chifact = %g)" %
-          (0.5*target_chi*len(survey.std), len(survey.std), target_chi))
-    print("Final Misfit:  %.3e" %
-          (0.5 * np.sum(((survey.dobs - invProb.dpred)/survey.std)**2.)))
-
-    xc = activeCellsMap * mrec_S
-    vec_xyz = Utils.matutils.atp2xyz(xc.reshape((-1, 3), order='F'))
-    Utils.io_utils.writeVectorUBC(
-        mesh,
-        save_model.fileName + '_l2.fld',
-        vec_xyz
+directiveList.append(
+    Directives.SaveUBCPredictedEveryIteration(
+        survey=survey,
+        fileName=outDir + input_dict["inversion_type"],
+        format=input_dict["inversion_type"]
     )
-    if show_graphics:
-        plot_convergence_curves(survey.std, inversion_output, target_chi, outDir, IRLS)
+)
 
-    if getattr(global_misfit, 'objfcts', None) is not None:
-        dpred = np.zeros(survey.nD)
-        for ind, dmis in enumerate(global_misfit.objfcts):
-            dpred[dmis.survey.ind] += dmis.survey.dpred(mrec_S).compute()
-    else:
-        dpred = global_misfit.survey.dpred(mrec_S)
+# Put all the parts together
+inv = Inversion.BaseInversion(
+    invProb, directiveList=directiveList
+)
 
-    Utils.io_utils.writeUBCmagneticsObservations(
-        outDir + 'Predicted_mvis.pre', survey, dpred+data_trend
+# SimPEG reports half phi_d, so we scale to matrch
+print(
+    "Start Inversion: " + inversion_style +
+    "\nTarget Misfit: %.2e (%.0f data with chifact = %g)" % (
+        0.5 * target_chi * len(survey.std), len(survey.std), target_chi
     )
+)
+
+# Run the inversion
+mrec = inv.run(mstart)
