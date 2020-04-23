@@ -369,8 +369,7 @@ else:
 
 # Update the specified data uncertainty
 if (
-    "new_uncert" in list(input_dict.keys()) and
-    input_dict["data_type"] in ['ubc_mag', 'ubc_grav']
+    "new_uncert" in list(input_dict.keys())
 ):
     new_uncert = input_dict["new_uncert"]
     if new_uncert:
@@ -380,6 +379,7 @@ if (
 
 if survey.std is None:
     survey.std = survey.dobs * 0 + 1  # Default
+
 
 print('Min uncert: {0:.6g} nT'.format(survey.std.min()))
 
@@ -580,7 +580,7 @@ if "model_start" in list(input_dict.keys()):
             "Start model needs to be a scalar or 3 component vector"
         )
 else:
-    model_start = [1e-4] * 3
+    model_start = [1e-3]
 
 if "model_reference" in list(input_dict.keys()):
 
@@ -595,7 +595,7 @@ if "model_reference" in list(input_dict.keys()):
             "Start model needs to be a scalar or 3 component vector"
         )
 else:
-    model_reference = [0.0] * 3
+    model_reference = [0.0]
 
 if "lower_bound" in list(input_dict.keys()):
     lower_bound = input_dict["lower_bound"]
@@ -987,6 +987,7 @@ def get_model(input_value, vector=vector_property):
                 # Flip the last vector back assuming ATP
                 model[:, -1] *= -1
             else:
+
                 model = input_mesh.readModelUBC(workDir + input_value)
                 model = Utils.sdiag(model) * np.kron(
                     Utils.matutils.dipazm_2_xyz(
@@ -1158,7 +1159,6 @@ def createLocalProb(meshLocal, local_survey, global_weights, ind):
         )
 
     local_survey.pair(prob)
-
     # Data misfit function
     local_misfit = DataMisfit.l2_DataMisfit(local_survey)
     local_misfit.W = 1./local_survey.std
@@ -1309,14 +1309,13 @@ invProb = InvProblem.BaseInvProblem(global_misfit, reg, opt, beta=initial_beta)
 directiveList = []
 
 # elif "save_to_ubc" in list(input_dict.keys()):
-
-if initial_beta is None:
-    directiveList.append(Directives.BetaEstimate_ByEig(beta0_ratio=1e+1))
-
 if vector_property:
     directiveList.append(Directives.VectorInversion(
         inversion_type = input_dict["inversion_type"])
     )
+
+if initial_beta is None:
+    directiveList.append(Directives.BetaEstimate_ByEig(beta0_ratio=1e+1))
 
 # Pre-conditioner
 directiveList.append(
@@ -1364,7 +1363,7 @@ print(
 
 # Run the inversion
 mrec = inv.run(mstart)
-
+print(data_trend)
 if (len(np.shape(data_trend)) > 0) or (data_trend == 0):
     Utils.io_utils.writeUBCmagneticsObservations(
-            outDir + 'Predicted_+trend.pre', survey, dpred+data_trend)
+            outDir + 'Predicted_+trend.pre', survey, invProb.dpred+data_trend)
