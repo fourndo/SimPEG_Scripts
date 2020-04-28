@@ -175,8 +175,14 @@ def decimate_survey_to_mesh(dec_mesh, data_trend, in_survey, full_survey=None):
 def plot_convergence_curves(uncert, inversion_output, target_chi, out_dir, IRLS=None):
     """Plot inversion convergence curves, including IRLS information where available"""
 
+    it = [d[0] for d in inversion_output]
+    phi_d = [d[1]['phi_d'] for d in inversion_output]
+    phi_m = [d[1]['phi_m'] for d in inversion_output]
+    irlsiter = [d[1]['IRLSiterStart'] for d in inversion_output][-1]
+    spherical = np.where([d[1]['coordinate_system'] in ['spherical'] for d in inversion_output])[0] + 1
+    
     fig, axs = plt.figure(), plt.subplot()
-    axs.plot(inversion_output.phi_d, 'ko-', lw=2)
+    axs.plot(it, phi_d, 'ko-', lw=2)
     phi_d_target = 0.5*target_chi*len(uncert)
     left, right = plt.xlim()
     axs.plot(
@@ -185,33 +191,44 @@ def plot_convergence_curves(uncert, inversion_output, target_chi, out_dir, IRLS=
     )
 
     plt.yscale('log')
-    if IRLS is None:
-        filename_suffix = ''
-    else:
-        filename_suffix = '_spherical'
-        bottom, top = plt.ylim()
+
+    bottom, top = plt.ylim()
+    if len(spherical) > 0:
         axs.plot(
-            np.r_[IRLS.iterStart, IRLS.iterStart],
-            np.r_[bottom, top], 'k:'
+            np.r_[spherical[0], spherical[0]],
+            np.r_[bottom, top], 'k--'
+        )
+        axs.text(
+            spherical[0], top,
+            'Spherical', va='top', ha='center',
+            rotation='vertical', size=12,
+            bbox={'facecolor': 'white'}
         )
 
-    twin = axs.twinx()
-    twin.plot(inversion_output.phi_m, 'k--', lw=2)
-    plt.autoscale(enable=True, axis='both', tight=True)
-    if IRLS is not None:
+    if irlsiter:
+        axs.plot(
+            np.r_[irlsiter, irlsiter],
+            np.r_[bottom, top], 'k--'
+        )
         axs.text(
-            IRLS.iterStart, top,
+            irlsiter, top,
             'IRLS', va='top', ha='center',
             rotation='vertical', size=12,
             bbox={'facecolor': 'white'}
         )
 
+    twin = plt.twinx()
+    twin.plot(it, phi_m, 'ko--', lw=2)
+    plt.autoscale(enable=True, axis='both', tight=True)
+
     axs.set_ylabel(r'$\phi_d$', size=16, rotation=0)
     axs.set_xlabel('Iterations', size=14)
     twin.set_ylabel(r'$\phi_m$', size=16, rotation=0)
+    axs.axis([left, right, bottom, top])
+    plt.minorticks_on()
     t = fig.get_size_inches()
     fig.set_size_inches(t[0]*2, t[1]*2)
-    fig.savefig(out_dir + 'Convergence_curve' + filename_suffix + '.png',
+    fig.savefig(out_dir + 'Convergence_curve.png',
                 bbox_inches='tight', dpi=300)
     plt.show(block=False)
 
@@ -1294,7 +1311,7 @@ else:
     reg = reg_p + reg_s + reg_t
 
     # Specify how the optimization will proceed, set susceptibility bounds to inf
-opt = Optimization.ProjectedGNCG(
+    opt = Optimization.ProjectedGNCG(
     maxIter=max_global_iterations,
     lower=lower_bound, upper=upper_bound,
     maxIterLS=20, maxIterCG=30, tolCG=1e-3,
@@ -1307,8 +1324,6 @@ invProb = InvProblem.BaseInvProblem(global_misfit, reg, opt, beta=initial_beta)
 
 # Add a list of directives to the inversion
 directiveList = []
-
-# elif "save_to_ubc" in list(input_dict.keys()):
 
 if initial_beta is None:
     directiveList.append(Directives.BetaEstimate_ByEig(beta0_ratio=1e+1))
@@ -1347,14 +1362,19 @@ directiveList.append(
         format=input_dict["inversion_type"]
     )
 )
+invProb_idx = len(directiveList) - 1
+
+directiveList.append(
+    Directives.SaveOutputDictEveryIteration()
+)
+inversion_output_idx = len(directiveList) - 1
 
 # Put all the parts together
 inv = Inversion.BaseInversion(
     invProb, directiveList=directiveList
 )
 
-
-# SimPEG reports half phi_d, so we scale to matrch
+# SimPEG reports half phi_d, so we scale to match
 print(
     "Start Inversion: " + inversion_style +
     "\nTarget Misfit: %.2e (%.0f data with chifact = %g)" % (
@@ -1364,7 +1384,16 @@ print(
 
 # Run the inversion
 mrec = inv.run(mstart)
+dpred = directiveList[invProb_idx].invProb.dpred
+
+print("Target Misfit: %.3e (%.0f data with chifact = %g)" %
+      (0.5*target_chi*len(survey.std), len(survey.std), target_chi))
+print("Final Misfit:  %.3e" %
+      (0.5 * np.sum(((survey.dobs - dpred)/survey.std)**2.)))
+
+if show_graphics:
+    plot_convergence_curves(survey.std, directiveList[inversion_output_idx].outDict.items(), target_chi, outDir)
 
 if (len(np.shape(data_trend)) > 0) or (data_trend == 0):
     Utils.io_utils.writeUBCmagneticsObservations(
-            outDir + 'Predicted_+trend.pre', survey, dpred+data_trend)
+    outDir + 'Predicted_+trend.pre', survey, dpred+data_trend)
