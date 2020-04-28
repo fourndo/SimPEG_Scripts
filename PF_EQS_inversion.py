@@ -443,7 +443,6 @@ def plot_convergence_curves(uncert, inversion_output, target_chi, out_dir, IRLS=
     fig.savefig(out_dir + 'Convergence_curve.png',
                 bbox_inches='tight', dpi=300)
     plt.show(block=False)
-    breakpoint()
 
 dsep = os.path.sep
 input_file = sys.argv[1]
