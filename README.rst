@@ -37,7 +37,7 @@ Optional settings: type = DEFAULT
     Alpha weights used to scale the regularization functions only used for mvis inversions.
         - Vector (mvi): Requires 12 values for [a_s, a_x, a_y, a_z, t_s, t_x, t_y, t_z, p_s, p_x, p_y, p_z]
 * ``chunk_by_rows``: bool = False
-    Alternate memory management mode that can be faster for very large sensitivity or forward calculations 
+    Alternate memory management mode that can be faster for very large sensitivity or forward calculations
 * ``depth_core``: dict: {str, float} = {"method": value}
     Thickness of core region defined by ``method``:
         - ``value``: Set ``value`` in meters
@@ -99,6 +99,10 @@ Optional settings: type = DEFAULT
     Target chi factor
 * ``tiled_inversion``: bool = True,
     Use tiles to speed up the inversion and keep the problem small
+* ``tiling_method``: str = 'cluster',
+    Choice of methods to brake up the survey into tiles:
+        - ``orthogonal``: Splits the survey by adding tiles of equal spatial dimensions.
+        - ``clustering``: Use scikit-learn.AgglomerativeClustering algorithm (slow for large problems)
 * ``upper_bound``: float = Inf
     Value to use for upper bound in each cell
 
