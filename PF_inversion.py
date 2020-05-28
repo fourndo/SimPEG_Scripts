@@ -588,6 +588,7 @@ else:
     alphas_mvis = [1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1]
 
 if "model_start" in list(input_dict.keys()):
+
     if isinstance(input_dict["model_start"], str):
         model_start = input_dict["model_start"]
 
@@ -597,7 +598,7 @@ if "model_start" in list(input_dict.keys()):
             "Start model needs to be a scalar or 3 component vector"
         )
 else:
-    model_start = [1e-3]
+    model_start = [1e-4]
 
 if "model_reference" in list(input_dict.keys()):
 
@@ -1047,11 +1048,7 @@ def get_model(input_value, vector=vector_property):
                 # Assumes amplitude reference value in inducing field direction
                 model = np.kron(
                     np.c_[
-                        input_value[0] *
-                        Utils.matutils.dipazm_2_xyz(
-                            dip=survey.srcField.param[1],
-                            azm_N=survey.srcField.param[2]
-                        )
+                        input_value[0], input_value[0],input_value[0]
                     ], np.ones(mesh.nC)
                 )[0, :]
 
@@ -1326,16 +1323,14 @@ invProb = InvProblem.BaseInvProblem(global_misfit, reg, opt, beta=initial_beta)
 # Add a list of directives to the inversion
 directiveList = []
 
-if initial_beta is None:
-    directiveList.append(Directives.BetaEstimate_ByEig(beta0_ratio=1e+1))
-
 if vector_property:
     directiveList.append(Directives.VectorInversion(
-        inversion_type = input_dict["inversion_type"])
+        inversion_type = input_dict["inversion_type"],
+        chifact_target=1.)
     )
 
 if initial_beta is None:
-    directiveList.append(Directives.BetaEstimate_ByEig(beta0_ratio=1e+2))
+    directiveList.append(Directives.BetaEstimate_ByEig(beta0_ratio=1e+1))
 
 # Pre-conditioner
 directiveList.append(
