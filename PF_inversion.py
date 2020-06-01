@@ -180,7 +180,7 @@ def plot_convergence_curves(uncert, inversion_output, target_chi, out_dir, IRLS=
     phi_m = [d[1]['phi_m'] for d in inversion_output]
     irlsiter = [d[1]['IRLSiterStart'] for d in inversion_output][-1]
     spherical = np.where([d[1]['coordinate_system'] in ['spherical'] for d in inversion_output])[0] + 1
-    
+
     fig, axs = plt.figure(), plt.subplot()
     axs.plot(it, phi_d, 'ko-', lw=2)
     phi_d_target = 0.5*target_chi*len(uncert)
@@ -449,8 +449,13 @@ else:
     shift_mesh_z0 = None
 
 if "topography" in list(input_dict.keys()):
-    topo = np.genfromtxt(workDir + input_dict["topography"],
-                         skip_header=1)
+
+    if isinstance(input_dict["topography"], str):
+        topo = np.genfromtxt(workDir + input_dict["topography"],
+                             skip_header=1)
+    else:
+        topo = survey.rxLoc.copy()
+        topo[:, 2] = input_dict["topography"]
 
 else:
 
@@ -1308,8 +1313,8 @@ else:
     # Assemble the 3-component regularizations
     reg = reg_p + reg_s + reg_t
 
-    # Specify how the optimization will proceed, set susceptibility bounds to inf
-    opt = Optimization.ProjectedGNCG(
+# Specify how the optimization will proceed, set susceptibility bounds to inf
+opt = Optimization.ProjectedGNCG(
     maxIter=max_global_iterations,
     lower=lower_bound, upper=upper_bound,
     maxIterLS=20, maxIterCG=30, tolCG=1e-3,
