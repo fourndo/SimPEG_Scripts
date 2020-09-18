@@ -1669,7 +1669,10 @@ if eqs_mvi:
     # MAG ONLY RTP Amplitude
     print("Run RTP forward model")
     # Add a constant height to the existing locations for upward continuation
-    new_locs = original_survey.srcField.rxList[0].locs
+    if add_data_padding or decimate_to_mesh:
+        new_locs = original_survey.srcField.rxList[0].locs
+    else:
+        new_locs = survey.srcField.rxList[0].locs
     new_locs[:, 2] += upward_continue
 
     # Mag only
