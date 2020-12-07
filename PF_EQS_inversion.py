@@ -226,7 +226,11 @@ def convert_geosoft_gridfile(gridname, topo, survey_altitude,
     F = LinearNDInterpolator(topo[ix, :2], topo[ix, 2] + survey_altitude)
 
     new_locs[:, 2] = F(new_locs[:, :2])
-    assert not any(np.isnan(new_locs[:, 2])), \
+    if any(np.isnan(new_locs[:, 2])):
+        print("Topography interpolation for grid failed, trying with full topo")
+        F = LinearNDInterpolator(topo[:, :2], topo[:, 2] + survey_altitude)
+        new_locs[:, 2] = F(new_locs[:, :2])
+    assert (not any(np.isnan(new_locs[:, 2]))), \
         "Topography interpolation for grid failed"
 
     # Create survey object
