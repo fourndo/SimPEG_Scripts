@@ -592,6 +592,16 @@ if "alphas_mvis" in list(input_dict.keys()):
 else:
     alphas_mvis = [1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1]
 
+if "input_vector_type" in list(input_dict.keys()):
+    assert (
+        input_dict["input_vector_type"] in ["xyz", "atp"]
+        ), (
+        "Input vector type needs to be xyz or atp"
+    )
+    input_vector_type = input_dict["input_vector_type"]
+else:
+    input_vector_type = "xyz"
+
 if "model_start" in list(input_dict.keys()):
 
     if isinstance(input_dict["model_start"], str):
@@ -1008,8 +1018,10 @@ def get_model(input_value, vector=vector_property):
 
             if "fld" in input_value:
                 model = Utils.io_utils.readVectorUBC(mesh, workDir + input_value)
-                # Flip the last vector back assuming ATP
-                model[:, -1] *= -1
+                if input_vector_type == 'atp':
+                    # Flip the last vector back assuming ATP
+                    model[:, -1] *= -1
+                    model = Utils.matutils.atp2xyz(model)
             else:
 
                 model = input_mesh.readModelUBC(workDir + input_value)
