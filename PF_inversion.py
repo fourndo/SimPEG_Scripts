@@ -1349,7 +1349,8 @@ if initial_beta is None:
 
 if vector_property:
     directiveList.append(Directives.VectorInversion(
-        inversion_type = input_dict["inversion_type"])
+        inversion_type = input_dict["inversion_type"],
+        chifact_target = target_chi)
     )
 
 # Pre-conditioner
