@@ -1685,6 +1685,41 @@ if (len(np.shape(data_trend)) > 0) or (data_trend == 0):
     Utils.io_utils.writeUBCmagneticsObservations(
         outDir + 'Predicted_+trend.pre', survey, dpred+data_trend)
 
+
+
+new_locs = survey.srcField.rxList[0].locs
+new_locs[:, 2] += upward_continue
+# Mag only
+rxLocNew = PF.BaseMag.RxObs(new_locs)
+# retain TF, but update inc-dec to vertical field
+srcField = PF.BaseMag.SrcField([rxLocNew], param=survey.srcField.param)
+forward = PF.BaseMag.LinearSurvey(srcField, components=['tmi'])
+
+# Set unity standard deviations (required but not used)
+forward.std = np.ones(new_locs.shape[0])
+
+if input_dict["inversion_type"] in ['mvi']:
+    idenMap = Maps.IdentityMap(nP=int(activeCells.sum()))
+    fwrProb = PF.Magnetics.MagneticIntegral(
+        mesh, chiMap=idenMap, actInd=activeCells, parallelized=parallelized,
+        forwardOnly=True, modelType='vector'
+        )
+
+    forward.pair(fwrProb)
+    pred = fwrProb.fields(mrec)
+else:
+    idenMap = Maps.IdentityMap(nP=3*int(activeCells.sum()))
+    fwrProb = PF.Magnetics.MagneticIntegral(
+        mesh, chiMap=idenMap, actInd=activeCells, parallelized=parallelized,
+        forwardOnly=True, coordinate_system='spherical', modelType='vector'
+        )
+
+    forward.pair(fwrProb)
+    pred = fwrProb.fields(mrec)
+
+Utils.io_utils.writeUBCmagneticsObservations(outDir + 'Forward.pre', forward, pred)
+
+
 ###############################################################################
 if eqs_mvi:
     # MAG ONLY RTP Amplitude
