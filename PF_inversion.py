@@ -1007,7 +1007,7 @@ activeCellsMap = Maps.InjectActiveCells(
 
 
 # Create reference and starting model
-def get_model(input_value, vector=vector_property):
+def get_model(input_value, vector=vector_property, input_mesh=None):
     # Loading a model file
     if isinstance(input_value, str):
 
@@ -1071,8 +1071,12 @@ def get_model(input_value, vector=vector_property):
 
     return mkvc(model)
 
-mref = get_model(model_reference)
-mstart = get_model(model_start)
+
+if input_mesh is None:
+    input_mesh = mesh
+
+mref = get_model(model_reference, input_mesh=input_mesh)
+mstart = get_model(model_start, input_mesh=input_mesh)
 
 # Reduce to active set
 if vector_property:
@@ -1340,14 +1344,13 @@ invProb = InvProblem.BaseInvProblem(global_misfit, reg, opt, beta=initial_beta)
 # Add a list of directives to the inversion
 directiveList = []
 
-if vector_property:
-    directiveList.append(Directives.VectorInversion(
-        inversion_type = input_dict["inversion_type"],
-        chifact_target=1.)
-    )
-
 if initial_beta is None:
     directiveList.append(Directives.BetaEstimate_ByEig(beta0_ratio=1e+1))
+
+if vector_property:
+    directiveList.append(Directives.VectorInversion(
+        inversion_type = input_dict["inversion_type"])
+    )
 
 # Pre-conditioner
 directiveList.append(
