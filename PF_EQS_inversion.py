@@ -208,13 +208,13 @@ def convert_geosoft_gridfile(gridname, topo, survey_altitude,
         topo_extent_label = ''
 
     # Only used to minimize the extent of topo resampling for large problems
-    max_distance = 2 * dx
+    max_distance = 5 * dx # if this distance gets too small the interpolant fails
 
     assert ((topo[:, 0].min() <= (new_locs[:, 0].min() - max_distance)) and
             (topo[:, 0].max() >= (new_locs[:, 0].max() + max_distance)) and
             (topo[:, 1].min() <= (new_locs[:, 1].min() - max_distance)) and
             (topo[:, 1].max() >= (new_locs[:, 1].max() + max_distance))), \
-           "Topography data does not extend to edge of data {}".format(topo_extent_label)
+            "Topography data does not extend to edge of data {}".format(topo_extent_label)
 
     # Create new data locations draped at survey_altitude above topo
     # When the topo data is much larger than the survey this could be slow

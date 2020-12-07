@@ -171,7 +171,7 @@ if model_type == 'scalar':
     activeCells = model != input_dict["no_data_value"]
     m0 = model[activeCells]
 else:
-    activeCells = model[:,0] != input_dict["no_data_value"]
+    activeCells = model[:, 0] != input_dict["no_data_value"]
     m0 = mkvc(model[activeCells, :])
 
 nC = int(activeCells.sum())  # Number of active cells

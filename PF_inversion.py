@@ -1329,8 +1329,8 @@ else:
     # Assemble the 3-component regularizations
     reg = reg_p + reg_s + reg_t
 
-# Specify how the optimization will proceed, set susceptibility bounds to inf
-opt = Optimization.ProjectedGNCG(
+    # Specify how the optimization will proceed, set susceptibility bounds to inf
+    opt = Optimization.ProjectedGNCG(
     maxIter=max_global_iterations,
     lower=lower_bound, upper=upper_bound,
     maxIterLS=20, maxIterCG=30, tolCG=1e-3,
@@ -1416,5 +1416,5 @@ if show_graphics:
 
 if (len(np.shape(data_trend)) > 0) or (data_trend == 0):
     Utils.io_utils.writeUBCmagneticsObservations(
-    outDir + 'Predicted_+trend.pre', survey, dpred+data_trend)
+        outDir + 'Predicted_+trend.pre', survey, dpred+data_trend)
 
