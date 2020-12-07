@@ -84,6 +84,9 @@ Optional settings: type = DEFAULT
         - float = value: Start property, scalar [1e-4].
         - list = [value, value, value]: Start property model values for vector model [1e-4, 1e-4, 1e-4]
                  If scalar input used for vector model, assume scalar amplitude in inducing field direction.
+* ``input_vector_type``: str
+    Specify vector file format used for ``model_start`` and ``model_reference`` (if it has a .FLD extension) 
+        - str = 'xyz' if vector files are XYZ (same as vector model output format). 'atp' if vector files are AMP, AZI, DIP.
 * ``new_uncert``: list = [0, 1]
     List of values to be used for uncertainties set as [%, floor] (% from 0-1) where
     uncertainty = max(% * |data|, floor)
