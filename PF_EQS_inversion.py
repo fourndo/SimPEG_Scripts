@@ -1616,9 +1616,11 @@ if initial_beta is None:
     directiveList.append(Directives.BetaEstimate_ByEig(beta0_ratio=1e+1))
 
 if vector_property:
+    # chifact_target (MVIS-only) should be higher than target_chi.
+    # If MVIS has problems, try increasing chifact_target.
     directiveList.append(Directives.VectorInversion(
         inversion_type = input_dict["inversion_type"],
-        chifact_target = target_chi)
+        chifact_target = 1.)
     )
 
 # Pre-conditioner
