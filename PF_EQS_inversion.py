@@ -951,6 +951,11 @@ if "tiled_inversion" in list(input_dict.keys()):
 else:
     tiled_inversion = True
 
+if "tiling_method" in list(input_dict.keys()):
+    tiling_method = 'orthogonal'
+else:
+    tiling_method = 'cluster'
+
 if "output_tile_files" in list(input_dict.keys()):
     output_tile_files = input_dict["output_tile_files"]
 else:
@@ -1106,15 +1111,11 @@ if tiled_inversion:
     while usedRAM > max_ram:
         print("Tiling:" + str(count))
 
-        if rxLoc.shape[0] > 40000:
-            # Default clustering algorithm goes slow on large data files,
-            # so switch to simple method
-            tiles, binCount, tileIDs, tile_numbers = \
-                Utils.modelutils.tileSurveyPoints(rxLoc, count, method=None)
-        else:
-            # Use clustering
-            tiles, binCount, tileIDs, tile_numbers = \
-                Utils.modelutils.tileSurveyPoints(rxLoc, count)
+        # Default clustering algorithm goes slow on large data files,
+        # so switch to simple method
+        tiles, binCount, tileIDs, tile_numbers = \
+            Utils.modelutils.tileSurveyPoints(rxLoc, count, method=tiling_method)
+
 
         # Grab the smallest bin and generate a temporary mesh
         indMax = np.argmax(binCount)
