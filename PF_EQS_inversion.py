@@ -1612,9 +1612,6 @@ invProb = InvProblem.BaseInvProblem(global_misfit, reg, opt, beta=initial_beta)
 # Add a list of directives to the inversion
 directiveList = []
 
-if initial_beta is None:
-    directiveList.append(Directives.BetaEstimate_ByEig(beta0_ratio=1e+1))
-
 if vector_property:
     # chifact_target (MVIS-only) should be higher than target_chi.
     # If MVIS has problems, try increasing chifact_target.
@@ -1623,7 +1620,6 @@ if vector_property:
         chifact_target = 1.)
     )
 
-# Pre-conditioner
 directiveList.append(
     Directives.Update_IRLS(
         f_min_change=1e-4,
@@ -1633,6 +1629,9 @@ directiveList.append(
         betaSearch=False
     )
 )
+
+if initial_beta is None:
+    directiveList.append(Directives.BetaEstimate_ByEig(beta0_ratio=1e+1))
 
 directiveList.append(Directives.UpdatePreconditioner())
 
