@@ -1329,8 +1329,8 @@ else:
     # Assemble the 3-component regularizations
     reg = reg_p + reg_s + reg_t
 
-    # Specify how the optimization will proceed, set susceptibility bounds to inf
-    opt = Optimization.ProjectedGNCG(
+# Specify how the optimization will proceed, set susceptibility bounds to inf
+opt = Optimization.ProjectedGNCG(
     maxIter=max_global_iterations,
     lower=lower_bound, upper=upper_bound,
     maxIterLS=20, maxIterCG=30, tolCG=1e-3,
