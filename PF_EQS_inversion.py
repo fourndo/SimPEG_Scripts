@@ -35,6 +35,8 @@ from SimPEG import (
     )
 from SimPEG.Utils import mkvc, matutils, modelutils
 
+np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)
+
 ###############################################################################
 # EQS Setup
 class GeosoftGrid:

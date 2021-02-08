@@ -33,6 +33,8 @@ from SimPEG import (
     )
 from SimPEG.Utils import mkvc, matutils, modelutils
 
+np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)
+
 def decimate_survey_to_mesh(dec_mesh, data_trend, in_survey, full_survey=None):
     """Load a Geosoft grid and convert it to a Simpeg PF survey object
 
