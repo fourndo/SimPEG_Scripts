@@ -1020,13 +1020,21 @@ if add_data_padding or decimate_to_mesh:
     elif add_data_padding:
         print("Decimating the padding points to the mesh")
         survey, data_trend = decimate_survey_to_mesh(decimate_mesh,
-                                                     data_trend, survey, original_survey)
+                                                     data_trend, survey,
+                                                     original_survey)
 
-    Utils.io_utils.writeUBCmagneticsObservations(
-    	outDir + os.path.splitext(
-    	os.path.basename(input_dict["data_file"]))[0] + '_ds.mag',
-    	survey, survey.dobs
-    )
+    if input_dict["inversion_type"] in ['grav']:
+        Utils.io_utils.writeUBCgravityObservations(
+            outDir + os.path.splitext(
+                os.path.basename(input_dict["data_file"]))[0] + '_ds.grv',
+            survey, survey.dobs
+        )
+    else:
+        Utils.io_utils.writeUBCmagneticsObservations(
+            outDir + os.path.splitext(
+                os.path.basename(input_dict["data_file"]))[0] + '_ds.mag',
+            survey, survey.dobs
+        )
 
 ###############################################################################
 # Processing
