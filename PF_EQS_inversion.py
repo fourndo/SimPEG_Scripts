@@ -533,11 +533,6 @@ if "survey_altitude" in list(input_dict.keys()):
 else:
     survey_altitude = 0.0
 
-if "upward_continue" in list(input_dict.keys()):
-    upward_continue = input_dict["upward_continue"]
-else:
-    upward_continue = 0.0
-
 ###############################################################################
 # Deal with the data
 if "inducing_field_aid" in list(input_dict.keys()):
@@ -754,6 +749,11 @@ if "drape_data" in list(input_dict.keys()):
     survey.srcField.rxList[0].locs = np.c_[rxLoc[:, :2], z]
 else:
     drape_data = None
+
+if "upward_continue" in list(input_dict.keys()):
+    upward_continue = input_dict["upward_continue"]
+else:
+    upward_continue = 0.0
 
 if "target_chi" in list(input_dict.keys()):
     target_chi = input_dict["target_chi"]
@@ -1684,42 +1684,76 @@ if show_graphics:
     plot_convergence_curves(survey.std, directiveList[inversion_output_idx].outDict.items(), target_chi, outDir)
 
 if (len(np.shape(data_trend)) > 0) or (data_trend == 0):
-    Utils.io_utils.writeUBCmagneticsObservations(
-        outDir + 'Predicted_+trend.pre', survey, dpred+data_trend)
+    if input_dict["inversion_type"] in ['grav']:
+        Utils.io_utils.writeUBCgravityObservations(
+            outDir + 'Predicted_+trend.pre', survey, dpred+data_trend)
 
+        if upward_continue > 0.0:
+            new_locs = survey.srcField.rxList[0].locs
+            new_locs[:, 2] += upward_continue
+            # Mag only
+            rxLocNew = PF.BaseGrav.RxObs(new_locs)
+            # retain TF, but update inc-dec to vertical field
+            srcField = PF.BaseGrav.SrcField([rxLocNew])
+            forward = PF.BaseGrav.LinearSurvey(srcField)
 
+            # Set unity standard deviations (required but not used)
+            forward.std = np.ones(new_locs.shape[0])
 
-new_locs = survey.srcField.rxList[0].locs
-new_locs[:, 2] += upward_continue
-# Mag only
-rxLocNew = PF.BaseMag.RxObs(new_locs)
-# retain TF, but update inc-dec to vertical field
-srcField = PF.BaseMag.SrcField([rxLocNew], param=survey.srcField.param)
-forward = PF.BaseMag.LinearSurvey(srcField, components=['tmi'])
+            idenMap = Maps.IdentityMap(nP=int(activeCells.sum()))
+            fwrProb = PF.Gravity.GravityIntegral(
+                mesh, rhoMap=idenMap, actInd=activeCells,
+                parallelized=parallelized,
+                forwardOnly=True
+                )
 
-# Set unity standard deviations (required but not used)
-forward.std = np.ones(new_locs.shape[0])
+            forward.pair(fwrProb)
+            pred = fwrProb.fields(mrec)
 
-if input_dict["inversion_type"] in ['mvi']:
-    idenMap = Maps.IdentityMap(nP=int(activeCells.sum()))
-    fwrProb = PF.Magnetics.MagneticIntegral(
-        mesh, chiMap=idenMap, actInd=activeCells, parallelized=parallelized,
-        forwardOnly=True, modelType='vector'
-        )
+            Utils.io_utils.writeUBCgravityObservations(outDir +
+                                                       'Upward_continue_{}m.pre'.format(upward_continue),
+                                                       forward, pred)
 
-    forward.pair(fwrProb)
-    pred = fwrProb.fields(mrec)
-else:
-    idenMap = Maps.IdentityMap(nP=3*int(activeCells.sum()))
-    fwrProb = PF.Magnetics.MagneticIntegral(
-        mesh, chiMap=idenMap, actInd=activeCells, parallelized=parallelized,
-        forwardOnly=True, coordinate_system='spherical', modelType='vector'
-        )
+    else:
+        Utils.io_utils.writeUBCmagneticsObservations(
+            outDir + 'Predicted_+trend.pre', survey, dpred+data_trend)
 
-    forward.pair(fwrProb)
-    pred = fwrProb.fields(mrec)
+        if upward_continue > 0.0:
+            new_locs = survey.srcField.rxList[0].locs
+            new_locs[:, 2] += upward_continue
+            # Mag only
+            rxLocNew = PF.BaseMag.RxObs(new_locs)
+            # retain TF, but update inc-dec to vertical field
+            srcField = PF.BaseMag.SrcField([rxLocNew], param=survey.srcField.param)
+            forward = PF.BaseMag.LinearSurvey(srcField, components=['tmi'])
 
-Utils.io_utils.writeUBCmagneticsObservations(outDir + 'Forward.pre', forward, pred)
+            # Set unity standard deviations (required but not used)
+            forward.std = np.ones(new_locs.shape[0])
+
+            if input_dict["inversion_type"] in ['mvi']:
+                idenMap = Maps.IdentityMap(nP=int(activeCells.sum()))
+                fwrProb = PF.Magnetics.MagneticIntegral(
+                    mesh, chiMap=idenMap, actInd=activeCells,
+                    parallelized=parallelized,
+                    forwardOnly=True, modelType='vector'
+                    )
+
+                forward.pair(fwrProb)
+                pred = fwrProb.fields(mrec)
+            else:
+                idenMap = Maps.IdentityMap(nP=3*int(activeCells.sum()))
+                fwrProb = PF.Magnetics.MagneticIntegral(
+                    mesh, chiMap=idenMap, actInd=activeCells,
+                    parallelized=parallelized, forwardOnly=True,
+                    coordinate_system='spherical', modelType='vector'
+                    )
+
+                forward.pair(fwrProb)
+                pred = fwrProb.fields(mrec)
+
+            Utils.io_utils.writeUBCmagneticsObservations(outDir +
+                                                         'Upward_continue_{}m.pre'.format(upward_continue),
+                                                         forward, pred)
 
 
 ###############################################################################
