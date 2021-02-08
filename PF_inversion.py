@@ -835,7 +835,8 @@ def createLocalMesh(rxLoc, ind_t):
             )
 
         meshLocal = meshutils.refine_tree_xyz(
-            meshLocal, topo_elevations_at_data_locs[ind_t, :], method='surface',
+            meshLocal, topo_elevations_at_data_locs[ind_t, :],
+            method='surface',
             max_distance=max_distance,
             octree_levels=octree_levels_obs,
             octree_levels_padding=octree_levels_padding,
@@ -869,8 +870,8 @@ if tiled_inversion:
         # Default clustering algorithm goes slow on large data files,
         # so switch to simple method
         tiles, binCount, tileIDs, tile_numbers = \
-            Utils.modelutils.tileSurveyPoints(rxLoc, count, method=tiling_method)
-
+            Utils.modelutils.tileSurveyPoints(rxLoc, count,
+                                              method=tiling_method)
 
         # Grab the smallest bin and generate a temporary mesh
         indMax = np.argmax(binCount)
@@ -1032,7 +1033,8 @@ def get_model(input_value, vector=vector_property, input_mesh=None):
         else:
 
             if "fld" in input_value:
-                model = Utils.io_utils.readVectorUBC(mesh, workDir + input_value)
+                model = Utils.io_utils.readVectorUBC(mesh,
+                                                     workDir + input_value)
                 if input_vector_type == 'atp':
                     # Flip the last vector back assuming ATP
                     model[:, -1] *= -1
@@ -1080,7 +1082,11 @@ def get_model(input_value, vector=vector_property, input_mesh=None):
                 # Assumes amplitude reference value in inducing field direction
                 model = np.kron(
                     np.c_[
-                        input_value[0], input_value[0],input_value[0]
+                        input_value[0] *
+                        Utils.matutils.dipazm_2_xyz(
+                            dip=survey.srcField.param[1],
+                            azm_N=survey.srcField.param[2]
+                        )
                     ], np.ones(mesh.nC)
                 )[0, :]
 
@@ -1210,6 +1216,7 @@ def createLocalProb(meshLocal, local_survey, global_weights, ind):
         )
 
     local_survey.pair(prob)
+
     # Data misfit function
     local_misfit = DataMisfit.l2_DataMisfit(local_survey)
     local_misfit.W = 1./local_survey.std
@@ -1262,7 +1269,8 @@ if tiled_inversion:
             global_misfit += local_misfit
 else:
 
-    global_misfit, global_weights = createLocalProb(mesh, survey, global_weights, 0)
+    global_misfit, global_weights = createLocalProb(mesh, survey,
+                                                    global_weights, 0)
 
 
 # Global sensitivity weights (linear)
@@ -1272,12 +1280,13 @@ global_weights = (global_weights/np.max(global_weights))
 if isinstance(mesh, Mesh.TreeMesh):
     Mesh.TreeMesh.writeUBC(
               mesh, outDir + 'OctreeMeshGlobal.msh',
-              models={outDir + 'SensWeights.mod': \
+              models={outDir + 'SensWeights.mod':
                       (activeCellsMap*model_map*global_weights)[:mesh.nC]}
             )
 else:
     mesh.writeModelUBC(
-          'SensWeights.mod', (activeCellsMap*model_map*global_weights)[:mesh.nC]
+          'SensWeights.mod',
+          (activeCellsMap*model_map*global_weights)[:mesh.nC]
     )
 
 if not vector_property:
@@ -1363,8 +1372,8 @@ if vector_property:
     # chifact_target (MVIS-only) should be higher than target_chi.
     # If MVIS has problems, try increasing chifact_target.
     directiveList.append(Directives.VectorInversion(
-        inversion_type = input_dict["inversion_type"],
-        chifact_target = 1.)
+        inversion_type=input_dict["inversion_type"],
+        chifact_target=1.)
     )
 
 directiveList.append(
@@ -1429,7 +1438,9 @@ print("Final Misfit:  %.3e" %
       (0.5 * np.sum(((survey.dobs - dpred)/survey.std)**2.)))
 
 if show_graphics:
-    plot_convergence_curves(survey.std, directiveList[inversion_output_idx].outDict.items(), target_chi, outDir)
+    plot_convergence_curves(survey.std,
+                            directiveList[inversion_output_idx].outDict.items(),
+                            target_chi, outDir)
 
 if (len(np.shape(data_trend)) > 0) or (data_trend == 0):
     if input_dict["inversion_type"] in ['grav']:
