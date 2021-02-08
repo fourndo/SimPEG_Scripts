@@ -620,7 +620,7 @@ if "model_start" in list(input_dict.keys()):
             "Start model needs to be a scalar or 3 component vector"
         )
 else:
-    model_start = [1e-4]
+    model_start = [1e-4] * 3
 
 if "model_reference" in list(input_dict.keys()):
 
@@ -635,7 +635,7 @@ if "model_reference" in list(input_dict.keys()):
             "Start model needs to be a scalar or 3 component vector"
         )
 else:
-    model_reference = [0.0]
+    model_reference = [0.0] * 3
 
 if "lower_bound" in list(input_dict.keys()):
     lower_bound = input_dict["lower_bound"]

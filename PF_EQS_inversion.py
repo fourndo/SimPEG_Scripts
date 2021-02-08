@@ -790,7 +790,7 @@ if (
 else:
     if (input_dict["inversion_type"] == 'mvi') or (np.all(model_norms == 2)):
         # Cartesian or not sparse
-        max_irls_iterations = 0
+        max_irls_iterations = 10
 
     else:
         # Spherical or sparse
