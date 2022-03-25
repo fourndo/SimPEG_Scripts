@@ -91,7 +91,7 @@ if "model_file" in list(driver.keys()):
     line = fid.readline()
     fid.close()
 
-    if np.array(line.split(), dtype=float).ndim > 1:
+    if np.array(line.split(), dtype=float).ndim > 0:
         model_type = 'vector'
         model = Utils.io_utils.readVectorUBC(
             mesh, workDir + input_dict["model_file"]
@@ -171,7 +171,7 @@ if model_type == 'scalar':
     activeCells = model != input_dict["no_data_value"]
     m0 = model[activeCells]
 else:
-    activeCells = model[:,0] != input_dict["no_data_value"]
+    activeCells = model[:, 0] != input_dict["no_data_value"]
     m0 = mkvc(model[activeCells, :])
 
 nC = int(activeCells.sum())  # Number of active cells

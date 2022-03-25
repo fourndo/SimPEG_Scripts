@@ -33,6 +33,8 @@ from SimPEG import (
     )
 from SimPEG.Utils import mkvc, matutils, modelutils
 
+np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)
+
 def decimate_survey_to_mesh(dec_mesh, data_trend, in_survey, full_survey=None):
     """Load a Geosoft grid and convert it to a Simpeg PF survey object
 
@@ -492,6 +494,11 @@ if "drape_data" in list(input_dict.keys()):
 else:
     drape_data = None
 
+if "upward_continue" in list(input_dict.keys()):
+    upward_continue = input_dict["upward_continue"]
+else:
+    upward_continue = 0.0
+
 if "target_chi" in list(input_dict.keys()):
     target_chi = input_dict["target_chi"]
 else:
@@ -592,6 +599,16 @@ if "alphas_mvis" in list(input_dict.keys()):
 else:
     alphas_mvis = [1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1]
 
+if "input_vector_type" in list(input_dict.keys()):
+    assert (
+        input_dict["input_vector_type"] in ["xyz", "atp"]
+        ), (
+        "Input vector type needs to be xyz or atp"
+    )
+    input_vector_type = input_dict["input_vector_type"]
+else:
+    input_vector_type = "xyz"
+
 if "model_start" in list(input_dict.keys()):
 
     if isinstance(input_dict["model_start"], str):
@@ -603,7 +620,7 @@ if "model_start" in list(input_dict.keys()):
             "Start model needs to be a scalar or 3 component vector"
         )
 else:
-    model_start = [1e-4]
+    model_start = [1e-4] * 3
 
 if "model_reference" in list(input_dict.keys()):
 
@@ -618,7 +635,7 @@ if "model_reference" in list(input_dict.keys()):
             "Start model needs to be a scalar or 3 component vector"
         )
 else:
-    model_reference = [0.0]
+    model_reference = [0.0] * 3
 
 if "lower_bound" in list(input_dict.keys()):
     lower_bound = input_dict["lower_bound"]
@@ -744,13 +761,21 @@ if add_data_padding or decimate_to_mesh:
     elif add_data_padding:
         print("Decimating the padding points to the mesh")
         survey, data_trend = decimate_survey_to_mesh(decimate_mesh,
-                                                     data_trend, survey, survey)
+                                                     data_trend, survey,
+                                                     survey)
 
-    Utils.io_utils.writeUBCmagneticsObservations(
-    	outDir + os.path.splitext(
-    	os.path.basename(input_dict["data_file"]))[0] + '_ds.mag',
-    	survey, survey.dobs
-    )
+    if input_dict["inversion_type"] in ['grav']:
+        Utils.io_utils.writeUBCgravityObservations(
+            outDir + os.path.splitext(
+                os.path.basename(input_dict["data_file"]))[0] + '_ds.grv',
+            survey, survey.dobs
+        )
+    else:
+        Utils.io_utils.writeUBCmagneticsObservations(
+            outDir + os.path.splitext(
+                os.path.basename(input_dict["data_file"]))[0] + '_ds.mag',
+            survey, survey.dobs
+        )
 
 ###############################################################################
 # Processing
@@ -810,7 +835,8 @@ def createLocalMesh(rxLoc, ind_t):
             )
 
         meshLocal = meshutils.refine_tree_xyz(
-            meshLocal, topo_elevations_at_data_locs[ind_t, :], method='surface',
+            meshLocal, topo_elevations_at_data_locs[ind_t, :],
+            method='surface',
             max_distance=max_distance,
             octree_levels=octree_levels_obs,
             octree_levels_padding=octree_levels_padding,
@@ -844,8 +870,8 @@ if tiled_inversion:
         # Default clustering algorithm goes slow on large data files,
         # so switch to simple method
         tiles, binCount, tileIDs, tile_numbers = \
-            Utils.modelutils.tileSurveyPoints(rxLoc, count, method=tiling_method)
-
+            Utils.modelutils.tileSurveyPoints(rxLoc, count,
+                                              method=tiling_method)
 
         # Grab the smallest bin and generate a temporary mesh
         indMax = np.argmax(binCount)
@@ -997,7 +1023,7 @@ activeCellsMap = Maps.InjectActiveCells(
 
 
 # Create reference and starting model
-def get_model(input_value, vector=vector_property):
+def get_model(input_value, vector=vector_property, input_mesh=None):
     # Loading a model file
     if isinstance(input_value, str):
 
@@ -1007,9 +1033,12 @@ def get_model(input_value, vector=vector_property):
         else:
 
             if "fld" in input_value:
-                model = Utils.io_utils.readVectorUBC(mesh, workDir + input_value)
-                # Flip the last vector back assuming ATP
-                model[:, -1] *= -1
+                model = Utils.io_utils.readVectorUBC(mesh,
+                                                     workDir + input_value)
+                if input_vector_type == 'atp':
+                    # Flip the last vector back assuming ATP
+                    model[:, -1] *= -1
+                    model = Utils.matutils.atp2xyz(model)
             else:
 
                 model = input_mesh.readModelUBC(workDir + input_value)
@@ -1053,14 +1082,22 @@ def get_model(input_value, vector=vector_property):
                 # Assumes amplitude reference value in inducing field direction
                 model = np.kron(
                     np.c_[
-                        input_value[0], input_value[0],input_value[0]
+                        input_value[0] *
+                        Utils.matutils.dipazm_2_xyz(
+                            dip=survey.srcField.param[1],
+                            azm_N=survey.srcField.param[2]
+                        )
                     ], np.ones(mesh.nC)
                 )[0, :]
 
     return mkvc(model)
 
-mref = get_model(model_reference)
-mstart = get_model(model_start)
+
+if input_mesh is None:
+    input_mesh = mesh
+
+mref = get_model(model_reference, input_mesh=input_mesh)
+mstart = get_model(model_start, input_mesh=input_mesh)
 
 # Reduce to active set
 if vector_property:
@@ -1179,6 +1216,7 @@ def createLocalProb(meshLocal, local_survey, global_weights, ind):
         )
 
     local_survey.pair(prob)
+
     # Data misfit function
     local_misfit = DataMisfit.l2_DataMisfit(local_survey)
     local_misfit.W = 1./local_survey.std
@@ -1231,7 +1269,8 @@ if tiled_inversion:
             global_misfit += local_misfit
 else:
 
-    global_misfit, global_weights = createLocalProb(mesh, survey, global_weights, 0)
+    global_misfit, global_weights = createLocalProb(mesh, survey,
+                                                    global_weights, 0)
 
 
 # Global sensitivity weights (linear)
@@ -1241,12 +1280,13 @@ global_weights = (global_weights/np.max(global_weights))
 if isinstance(mesh, Mesh.TreeMesh):
     Mesh.TreeMesh.writeUBC(
               mesh, outDir + 'OctreeMeshGlobal.msh',
-              models={outDir + 'SensWeights.mod': \
+              models={outDir + 'SensWeights.mod':
                       (activeCellsMap*model_map*global_weights)[:mesh.nC]}
             )
 else:
     mesh.writeModelUBC(
-          'SensWeights.mod', (activeCellsMap*model_map*global_weights)[:mesh.nC]
+          'SensWeights.mod',
+          (activeCellsMap*model_map*global_weights)[:mesh.nC]
     )
 
 if not vector_property:
@@ -1329,15 +1369,13 @@ invProb = InvProblem.BaseInvProblem(global_misfit, reg, opt, beta=initial_beta)
 directiveList = []
 
 if vector_property:
+    # chifact_target (MVIS-only) should be higher than target_chi.
+    # If MVIS has problems, try increasing chifact_target.
     directiveList.append(Directives.VectorInversion(
-        inversion_type = input_dict["inversion_type"],
+        inversion_type=input_dict["inversion_type"],
         chifact_target=1.)
     )
 
-if initial_beta is None:
-    directiveList.append(Directives.BetaEstimate_ByEig(beta0_ratio=1e+1))
-
-# Pre-conditioner
 directiveList.append(
     Directives.Update_IRLS(
         f_min_change=1e-4,
@@ -1347,6 +1385,9 @@ directiveList.append(
         betaSearch=False
     )
 )
+
+if initial_beta is None:
+    directiveList.append(Directives.BetaEstimate_ByEig(beta0_ratio=1e+1))
 
 directiveList.append(Directives.UpdatePreconditioner())
 
@@ -1397,9 +1438,78 @@ print("Final Misfit:  %.3e" %
       (0.5 * np.sum(((survey.dobs - dpred)/survey.std)**2.)))
 
 if show_graphics:
-    plot_convergence_curves(survey.std, directiveList[inversion_output_idx].outDict.items(), target_chi, outDir)
+    plot_convergence_curves(survey.std,
+                            directiveList[inversion_output_idx].outDict.items(),
+                            target_chi, outDir)
 
 if (len(np.shape(data_trend)) > 0) or (data_trend == 0):
-    Utils.io_utils.writeUBCmagneticsObservations(
-    outDir + 'Predicted_+trend.pre', survey, dpred+data_trend)
+    if input_dict["inversion_type"] in ['grav']:
+        Utils.io_utils.writeUBCgravityObservations(
+            outDir + 'Predicted_+trend.pre', survey, dpred+data_trend)
 
+        if upward_continue > 0.0:
+            new_locs = survey.srcField.rxList[0].locs
+            new_locs[:, 2] += upward_continue
+            # Mag only
+            rxLocNew = PF.BaseGrav.RxObs(new_locs)
+            # retain TF, but update inc-dec to vertical field
+            srcField = PF.BaseGrav.SrcField([rxLocNew])
+            forward = PF.BaseGrav.LinearSurvey(srcField)
+
+            # Set unity standard deviations (required but not used)
+            forward.std = np.ones(new_locs.shape[0])
+
+            idenMap = Maps.IdentityMap(nP=int(activeCells.sum()))
+            fwrProb = PF.Gravity.GravityIntegral(
+                mesh, rhoMap=idenMap, actInd=activeCells,
+                parallelized=parallelized,
+                forwardOnly=True
+                )
+
+            forward.pair(fwrProb)
+            pred = fwrProb.fields(mrec)
+
+            Utils.io_utils.writeUBCgravityObservations(outDir +
+                                                       'Upward_continue_{}m.pre'.format(upward_continue),
+                                                       forward, pred)
+
+    else:
+        Utils.io_utils.writeUBCmagneticsObservations(
+            outDir + 'Predicted_+trend.pre', survey, dpred+data_trend)
+
+        if upward_continue > 0.0:
+            new_locs = survey.srcField.rxList[0].locs
+            new_locs[:, 2] += upward_continue
+            # Mag only
+            rxLocNew = PF.BaseMag.RxObs(new_locs)
+            # retain TF, but update inc-dec to vertical field
+            srcField = PF.BaseMag.SrcField([rxLocNew], param=survey.srcField.param)
+            forward = PF.BaseMag.LinearSurvey(srcField, components=['tmi'])
+
+            # Set unity standard deviations (required but not used)
+            forward.std = np.ones(new_locs.shape[0])
+
+            if input_dict["inversion_type"] in ['mvi']:
+                idenMap = Maps.IdentityMap(nP=int(activeCells.sum()))
+                fwrProb = PF.Magnetics.MagneticIntegral(
+                    mesh, chiMap=idenMap, actInd=activeCells,
+                    parallelized=parallelized,
+                    forwardOnly=True, modelType='vector'
+                    )
+
+                forward.pair(fwrProb)
+                pred = fwrProb.fields(mrec)
+            else:
+                idenMap = Maps.IdentityMap(nP=3*int(activeCells.sum()))
+                fwrProb = PF.Magnetics.MagneticIntegral(
+                    mesh, chiMap=idenMap, actInd=activeCells,
+                    parallelized=parallelized, forwardOnly=True,
+                    coordinate_system='spherical', modelType='vector'
+                    )
+
+                forward.pair(fwrProb)
+                pred = fwrProb.fields(mrec)
+
+            Utils.io_utils.writeUBCmagneticsObservations(outDir +
+                                                         'Upward_continue_{}m.pre'.format(upward_continue),
+                                                         forward, pred)
